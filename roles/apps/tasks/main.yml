@@ -148,6 +148,13 @@
   notify: [reload systemd]
   become: yes
 
+- name: Crear dir para drop-ins de electron
+  file:
+    path: /etc/systemd/system/electron_rasp-electron.service.d
+    state: directory
+    mode: "0755"
+  become: yes
+
 - name: Drop-in override (CPU + flags)
   template:
     src: electron_rasp-electron.override.conf.j2
@@ -221,6 +228,14 @@
     - { option: "autologin-user",   value: "{{ lightdm_autologin_user }}" }
     - { option: "autologin-session", value: "{{ lightdm_session }}" }
     - { option: "user-session",      value: "{{ lightdm_session }}" }
+  when: manage_lightdm
+  become: yes
+
+- name: Habilitar lightdm (display manager)
+  systemd:
+    name: lightdm.service
+    enabled: yes
+    state: started
   when: manage_lightdm
   become: yes
 
