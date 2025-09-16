@@ -1,0 +1,22 @@
+[Unit]
+Description=Electron kiosk (electron_rasp)
+After=graphical.target electron_rasp-flask.service
+Requires=electron_rasp-flask.service
+StartLimitIntervalSec=0
+StartLimitBurst=0
+
+[Service]
+User={{ kiosk_user }}
+Environment=DISPLAY=:0
+Environment="BRANCH_ID={{ BRANCH_ID }}"
+WorkingDirectory={{ electron_app_dir }}
+ExecStart=/usr/bin/npm run electron
+KillMode=control-group
+TimeoutStopSec=15s
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

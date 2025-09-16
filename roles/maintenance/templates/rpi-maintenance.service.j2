@@ -1,0 +1,7 @@
+[Unit]
+Description=Raspberry Pi daily maintenance
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/rpi_maintenance.sh
+SuccessExitStatus=0

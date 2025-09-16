@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Raspberry Pi maintenance daily
+
+[Timer]
+OnBootSec=3min
+OnCalendar=*-*-* {{ maintenance_hour }}
+Persistent=yes
+
+[Install]
+WantedBy=timers.target

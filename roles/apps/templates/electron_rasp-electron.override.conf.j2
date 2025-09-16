@@ -1,0 +1,14 @@
+[Service]
+{% if ansible_processor_vcpus|default(2)|int >= 4 %}
+CPUAffinity={{ cpuset_default }}
+{% endif %}
+Nice=-10
+Environment="ELECTRON_EXTRA_LAUNCH_ARGS=\
+--use-gl=egl \
+--enable-gpu-rasterization \
+--enable-zero-copy \
+--enable-features=CanvasOopRasterization,VaapiVideoDecoder \
+--disable-backgrounding-occluded-windows \
+--disable-renderer-backgrounding \
+--disable-features=BackForwardCache,InterestFeedContentSuggestions,NotificationIndicator \
+--autoplay-policy=no-user-gesture-required"

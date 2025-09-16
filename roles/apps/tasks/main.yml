@@ -1,0 +1,242 @@
+---
+# ---------- Paquetes base ----------
+- name: Instalar paquetes base
+  apt:
+    name: "{{ apt_base_packages }}"
+    update_cache: yes
+  become: yes
+
+# ---------- Directorios ----------
+- name: Crear directorios base
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ kiosk_user }}"
+    group: "{{ kiosk_user }}"
+    mode: "0755"
+  loop:
+    - "{{ electron_root }}"
+    - "{{ signage_root }}"
+  become: yes
+
+# ---------- (OPCIONAL) Claves SSH para clonar privados ----------
+# Si vas a clonar con deploy keys en el TARGET, descomenta este bloque.
+# Los archivos deben existir en: {{ playbook_dir }}/secrets/id_ed25519_electron y ..._signage
+# - name: Crear ~/.ssh
+#   file:
+#     path: "/home/{{ kiosk_user }}/.ssh"
+#     state: directory
+#     owner: "{{ kiosk_user }}"
+#     group: "{{ kiosk_user }}"
+#     mode: "0700"
+#   become: yes
+#
+# - name: Copiar llave electron (Vault)
+#   copy:
+#     src: "{{ playbook_dir }}/secrets/id_ed25519_electron"
+#     dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519_electron"
+#     mode: "0600"
+#     owner: "{{ kiosk_user }}"
+#     group: "{{ kiosk_user }}"
+#   become: yes
+#   no_log: true
+#
+# - name: Copiar llave signage (Vault)
+#   copy:
+#     src: "{{ playbook_dir }}/secrets/id_ed25519_signage"
+#     dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519_signage"
+#     mode: "0600"
+#     owner: "{{ kiosk_user }}"
+#     group: "{{ kiosk_user }}"
+#   become: yes
+#   no_log: true
+#
+# - name: Asegurar known_hosts (GitHub)
+#   known_hosts:
+#     name: github.com
+#     key: "{{ lookup('pipe', 'ssh-keyscan -t rsa,ecdsa,ed25519 github.com') }}"
+#     path: "/home/{{ kiosk_user }}/.ssh/known_hosts"
+#   become: yes
+#   become_user: "{{ kiosk_user }}"
+#
+# - name: Config ~/.ssh/config (si usas alias github-signage)
+#   blockinfile:
+#     path: "/home/{{ kiosk_user }}/.ssh/config"
+#     create: yes
+#     owner: "{{ kiosk_user }}"
+#     group: "{{ kiosk_user }}"
+#     mode: "0600"
+#     block: |
+#       Host github-signage
+#         HostName github.com
+#         User git
+#         IdentityFile ~/.ssh/id_ed25519_signage
+#       Host github.com
+#         User git
+#         IdentityFile ~/.ssh/id_ed25519_electron
+#   when: electron_repo is search('github-signage') or signage_repo is search('github-signage')
+#   become: yes
+
+# ---------- Clonar/actualizar repos ----------
+- name: Clonar/actualizar electron_rasp
+  git:
+    repo: "{{ electron_repo }}"
+    dest: "{{ electron_root }}/electron_rasp"
+    version: main
+    force: yes
+    accept_hostkey: yes
+    # key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519_electron"  # si usas deploy key en el target
+  become: yes
+  become_user: "{{ kiosk_user }}"
+
+- name: Clonar/actualizar signage
+  git:
+    repo: "{{ signage_repo }}"
+    dest: "{{ signage_root }}/signage"
+    version: main
+    force: yes
+    accept_hostkey: yes
+    # key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519_signage"
+  become: yes
+  become_user: "{{ kiosk_user }}"
+
+# ---------- Python venv + requirements ----------
+- name: Crear venv (si no existe)
+  command: "{{ python_bin }} -m venv {{ venv_dir }}"
+  args: { creates: "{{ venv_dir }}/bin/activate" }
+  become: yes
+  become_user: "{{ kiosk_user }}"
+
+- name: Instalar requirements (Flask)
+  command: "{{ venv_dir }}/bin/pip install --upgrade -r {{ requirements_file }}"
+  become: yes
+  become_user: "{{ kiosk_user }}"
+
+# ---------- NPM para Electron ----------
+- name: Instalar dependencias npm (electron)
+  command: npm ci
+  args:
+    chdir: "{{ electron_app_dir }}"
+  become: yes
+  become_user: "{{ kiosk_user }}"
+
+# ---------- Scripts de auto-pull (copiados 1:1 de tu Pi) ----------
+- name: Instalar update_repo.sh (electron)
+  copy:
+    src: update_repo.sh
+    dest: "{{ electron_root }}/update_repo.sh"
+    mode: "0755"
+    owner: "{{ kiosk_user }}"
+    group: "{{ kiosk_user }}"
+  become: yes
+
+- name: Instalar signage update.sh
+  copy:
+    src: signage_update.sh
+    dest: "{{ signage_root }}/signage/update.sh"
+    mode: "0755"
+    owner: "{{ kiosk_user }}"
+    group: "{{ kiosk_user }}"
+  become: yes
+
+# ---------- systemd: services/timers ----------
+- name: electron_rasp-electron.service
+  template:
+    src: electron_rasp-electron.service.j2
+    dest: /etc/systemd/system/electron_rasp-electron.service
+    mode: "0644"
+  notify: [reload systemd]
+  become: yes
+
+- name: Drop-in override (CPU + flags)
+  template:
+    src: electron_rasp-electron.override.conf.j2
+    dest: /etc/systemd/system/electron_rasp-electron.service.d/override.conf
+    mode: "0644"
+  notify: [reload systemd]
+  become: yes
+
+- name: electron_rasp-flask.service
+  template:
+    src: electron_rasp-flask.service.j2
+    dest: /etc/systemd/system/electron_rasp-flask.service
+    mode: "0644"
+  notify: [reload systemd]
+  become: yes
+
+- name: electron_rasp-update.service
+  template:
+    src: electron_rasp-update.service.j2
+    dest: /etc/systemd/system/electron_rasp-update.service
+    mode: "0644"
+  notify: [reload systemd]
+  become: yes
+
+- name: electron_rasp-update.timer
+  template:
+    src: electron_rasp-update.timer.j2
+    dest: /etc/systemd/system/electron_rasp-update.timer
+    mode: "0644"
+  notify: [reload systemd]
+  become: yes
+
+- name: signage-update.service
+  template:
+    src: signage-update.service.j2
+    dest: /etc/systemd/system/signage-update.service
+    mode: "0644"
+  notify: [reload systemd]
+  become: yes
+
+- name: signage-update.timer
+  template:
+    src: signage-update.timer.j2
+    dest: /etc/systemd/system/signage-update.timer
+    mode: "0644"
+  notify: [reload systemd]
+  become: yes
+
+- name: Habilitar y arrancar servicios/timers
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+    state: started
+  loop:
+    - electron_rasp-flask.service
+    - electron_rasp-electron.service
+    - electron_rasp-update.timer
+    - signage-update.timer
+  become: yes
+
+# ---------- LightDM autologin (opcional) ----------
+- name: Configurar autologin en LightDM (opcional)
+  ini_file:
+    path: /etc/lightdm/lightdm.conf
+    section: "Seat:*"
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    no_extra_spaces: true
+    backup: yes
+  loop:
+    - { option: "autologin-user",   value: "{{ lightdm_autologin_user }}" }
+    - { option: "autologin-session", value: "{{ lightdm_session }}" }
+    - { option: "user-session",      value: "{{ lightdm_session }}" }
+  when: manage_lightdm
+  become: yes
+
+# ---------- Remotos (AnyDesk/TeamViewer): sólo habilitar ----------
+- name: Habilitar servicios de remoto (si existen)
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+    state: started
+  loop: "{{ remote_services }}"
+  when: enable_remote_services
+  ignore_errors: true
+  become: yes
+
+handlers:
+  - name: reload systemd
+    systemd:
+      daemon_reload: yes
+    become: yes

@@ -1,0 +1,36 @@
+---
+- name: Instalar script de mantenimiento
+  copy:
+    src: rpi_maintenance.sh
+    dest: /usr/local/bin/rpi_maintenance.sh
+    mode: "0755"
+  become: yes
+
+- name: Instalar rpi-maintenance.service
+  template:
+    src: rpi-maintenance.service.j2
+    dest: /etc/systemd/system/rpi-maintenance.service
+    mode: "0644"
+  notify: [reload systemd]
+  become: yes
+
+- name: Instalar rpi-maintenance.timer
+  template:
+    src: rpi-maintenance.timer.j2
+    dest: /etc/systemd/system/rpi-maintenance.timer
+    mode: "0644"
+  notify: [reload systemd]
+  become: yes
+
+- name: Habilitar timer mantenimiento
+  systemd:
+    name: rpi-maintenance.timer
+    enabled: yes
+    state: started
+  become: yes
+
+handlers:
+  - name: reload systemd
+    systemd:
+      daemon_reload: yes
+    become: yes

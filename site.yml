@@ -1,0 +1,7 @@
+---
+- hosts: raspis
+  become: yes
+  roles:
+    - apps
+    - maintenance
+    - sudoers

@@ -1,0 +1,12 @@
+[Unit]
+Description=Pull electron_rasp repo y reinicia servicios si cambia
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{ kiosk_user }}
+WorkingDirectory={{ electron_root }}/electron_rasp
+ExecStart={{ electron_root }}/update_repo.sh
+StandardOutput=journal
+StandardError=journal

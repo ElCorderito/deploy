@@ -1,0 +1,48 @@
+# --- Rutas base y repos
+electron_root: /opt/electron_rasp
+signage_root:  /opt/signage
+
+# Usa estos remotos (puedes dejarlos igual que en tu Pi)
+electron_repo: "git@github.com:ElCorderito/electron_rasp.git"
+signage_repo:  "git@github.com:ElCorderito/signage.git"   # (si quieres alias github-signage, ver bloque ~/.ssh/config más abajo)
+
+# Usuario que corre los servicios de tu app (normalmente el ansible_user)
+kiosk_user: "{{ ansible_user }}"
+
+# --- Python / Electron
+python_bin:  /usr/bin/python3.11
+venv_dir:    "{{ electron_root }}/venv"
+flask_app_dir: "{{ electron_root }}/electron_rasp/flask_app"
+requirements_file: "{{ electron_root }}/electron_rasp/requirements.txt"
+electron_app_dir:  "{{ electron_root }}/electron_rasp/electron"
+
+# --- Timers
+electron_update_every: "2min"
+signage_update_every:  "10min"
+maintenance_hour:      "03:00:00"
+
+# --- Optimización CPU del service de Electron (se aplica si hay >=4 vCPUs)
+cpuset_default: "2 3"
+
+# --- Paquetes base para kiosk/X y utilidades
+apt_base_packages:
+  - git
+  - python3.11
+  - python3.11-venv
+  - python3-pip
+  - nodejs
+  - npm
+  - lxde
+  - lightdm
+  - xserver-xorg
+
+# --- Autologin de LightDM (para que no pida contraseña)
+manage_lightdm: true
+lightdm_autologin_user: "{{ kiosk_user }}"
+lightdm_session: "LXDE-pi-x"
+
+# --- Remotos (sólo habilitar si ya están instalados por paquete)
+enable_remote_services: true
+remote_services:
+  - anydesk.service
+  - teamviewerd.service

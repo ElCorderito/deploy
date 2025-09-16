@@ -1,0 +1,13 @@
+[Unit]
+Description=Comprobar electron_rasp repo periódicamente
+After=network-online.target
+Wants=network-online.target
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec={{ electron_update_every }}
+Unit=electron_rasp-update.service
+Persistent=yes
+
+[Install]
+WantedBy=timers.target

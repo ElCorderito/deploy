@@ -1,0 +1,12 @@
+[Unit]
+Description=Pull signage repo y reinicia electron_rasp si cambia
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{ kiosk_user }}
+WorkingDirectory={{ signage_root }}/signage
+ExecStart={{ signage_root }}/signage/update.sh
+StandardOutput=journal
+StandardError=journal

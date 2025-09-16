@@ -1,0 +1,17 @@
+[Unit]
+Description=Flask backend (electron_rasp)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User={{ kiosk_user }}
+WorkingDirectory={{ flask_app_dir }}
+ExecStart={{ venv_dir }}/bin/python {{ flask_app_dir }}/app.py
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

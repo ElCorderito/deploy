@@ -1,0 +1,12 @@
+---
+- name: Permitir restarts específicos sin password
+  copy:
+    dest: /etc/sudoers.d/electron_rasp
+    mode: "0440"
+    owner: root
+    group: root
+    content: |
+      # Permite que {{ kiosk_user }} reinicie sólo estos servicios
+      {{ kiosk_user }} ALL=NOPASSWD:/bin/systemctl restart electron_rasp-flask.service
+      {{ kiosk_user }} ALL=NOPASSWD:/bin/systemctl restart electron_rasp-electron.service
+  become: yes
