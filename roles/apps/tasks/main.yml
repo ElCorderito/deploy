@@ -251,9 +251,3 @@
   when: enable_remote_services
   ignore_errors: true
   become: yes
-
-handlers:
-  - name: reload systemd
-    systemd:
-      daemon_reload: yes
-    become: yes
