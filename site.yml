@@ -8,7 +8,7 @@
     - sudoers
 
   post_tasks:
-    - name: Reboot (hosts con conexión SSH normal)
+    - name: Reboot (SSH remoto)
       ansible.builtin.reboot:
         msg: "Reinicio automático después del deploy"
         connect_timeout: 5
@@ -18,7 +18,7 @@
         test_command: whoami
       when: ansible_connection != 'local'
 
-    - name: Reboot (host local: desacoplado)
+    - name: "Reboot (host local - desacoplado)"
       ansible.builtin.shell: "sleep 2 && /sbin/shutdown -r now 'reboot post-deploy'"
       async: 1
       poll: 0
