@@ -7,6 +7,8 @@ Wants=network-online.target
 Type=oneshot
 User={{ kiosk_user }}
 WorkingDirectory={{ electron_root }}/electron_rasp
+Environment=HOME=/home/{{ kiosk_user }}
 ExecStart={{ electron_root }}/update_repo.sh
+Restart=no
 StandardOutput=journal
 StandardError=journal

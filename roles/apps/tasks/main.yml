@@ -57,6 +57,20 @@
   become: yes
   become_user: "{{ kiosk_user }}"
 
+- name: Configurar ~/.ssh/config para usar la key de electron en github.com
+  blockinfile:
+    path: "/home/{{ kiosk_user }}/.ssh/config"
+    create: yes
+    owner: "{{ kiosk_user }}"
+    group: "{{ kiosk_user }}"
+    mode: "0600"
+    block: |
+      Host github.com
+        User git
+        IdentityFile ~/.ssh/id_ed25519_electron
+        IdentitiesOnly yes
+  become: yes
+
 # Solo si tu remoto de signage usa git@github-signage:...
 - name: Config ~/.ssh/config con alias github-signage
   blockinfile:
