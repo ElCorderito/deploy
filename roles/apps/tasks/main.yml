@@ -230,6 +230,7 @@
     - { option: "autologin-user",   value: "{{ lightdm_autologin_user }}" }
     - { option: "autologin-session", value: "{{ lightdm_session }}" }
     - { option: "user-session",      value: "{{ lightdm_session }}" }
+    - { option: "xserver-command",   value: "X" }
   when: manage_lightdm
   become: yes
 

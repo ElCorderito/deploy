@@ -108,8 +108,8 @@ electron_repo: "git@github.com:ElCorderito/electron_rasp.git"
 signage_repo:  "git@github.com:ElCorderito/signage.git"
 
 # Ramas por defecto del remoto
-electron_branch: master   # o main, según tu repo
-signage_branch:  main     # o master, según tu repo
+electron_branch: master
+signage_branch:  master
 
 # Usuario que ejecuta los servicios (normalmente tu ansible_user)
 kiosk_user: "{{ ansible_user }}"
