@@ -1,3 +1,6 @@
+electron_branch: master
+signage_branch:  master
+
 # --- Rutas base y repos
 electron_root: /opt/electron_rasp
 signage_root:  /opt/signage
