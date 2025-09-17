@@ -19,63 +19,65 @@
     - "{{ signage_root }}"
   become: yes
 
-# ---------- (OPCIONAL) Claves SSH para clonar privados ----------
-# Si vas a clonar con deploy keys en el TARGET, descomenta este bloque.
-# Los archivos deben existir en: {{ playbook_dir }}/secrets/id_ed25519_electron y ..._signage
-# - name: Crear ~/.ssh
-#   file:
-#     path: "/home/{{ kiosk_user }}/.ssh"
-#     state: directory
-#     owner: "{{ kiosk_user }}"
-#     group: "{{ kiosk_user }}"
-#     mode: "0700"
-#   become: yes
-#
-# - name: Copiar llave electron (Vault)
-#   copy:
-#     src: "{{ playbook_dir }}/secrets/id_ed25519_electron"
-#     dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519_electron"
-#     mode: "0600"
-#     owner: "{{ kiosk_user }}"
-#     group: "{{ kiosk_user }}"
-#   become: yes
-#   no_log: true
-#
-# - name: Copiar llave signage (Vault)
-#   copy:
-#     src: "{{ playbook_dir }}/secrets/id_ed25519_signage"
-#     dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519_signage"
-#     mode: "0600"
-#     owner: "{{ kiosk_user }}"
-#     group: "{{ kiosk_user }}"
-#   become: yes
-#   no_log: true
-#
-# - name: Asegurar known_hosts (GitHub)
-#   known_hosts:
-#     name: github.com
-#     key: "{{ lookup('pipe', 'ssh-keyscan -t rsa,ecdsa,ed25519 github.com') }}"
-#     path: "/home/{{ kiosk_user }}/.ssh/known_hosts"
-#   become: yes
-#   become_user: "{{ kiosk_user }}"
-#
-# - name: Config ~/.ssh/config (si usas alias github-signage)
-#   blockinfile:
-#     path: "/home/{{ kiosk_user }}/.ssh/config"
-#     create: yes
-#     owner: "{{ kiosk_user }}"
-#     group: "{{ kiosk_user }}"
-#     mode: "0600"
-#     block: |
-#       Host github-signage
-#         HostName github.com
-#         User git
-#         IdentityFile ~/.ssh/id_ed25519_signage
-#       Host github.com
-#         User git
-#         IdentityFile ~/.ssh/id_ed25519_electron
-#   when: electron_repo is search('github-signage') or signage_repo is search('github-signage')
-#   become: yes
+# --- SSH keys en el target (NECESARIO si los repos son privados) ---
+- name: Crear ~/.ssh
+  file:
+    path: "/home/{{ kiosk_user }}/.ssh"
+    state: directory
+    owner: "{{ kiosk_user }}"
+    group: "{{ kiosk_user }}"
+    mode: "0700"
+  become: yes
+
+- name: Copiar llave electron (Vault)
+  copy:
+    src: "{{ playbook_dir }}/secrets/id_ed25519_electron"
+    dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519_electron"
+    mode: "0600"
+    owner: "{{ kiosk_user }}"
+    group: "{{ kiosk_user }}"
+  become: yes
+  no_log: true
+
+- name: Copiar llave signage (Vault)
+  copy:
+    src: "{{ playbook_dir }}/secrets/id_ed25519_signage"
+    dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519_signage"
+    mode: "0600"
+    owner: "{{ kiosk_user }}"
+    group: "{{ kiosk_user }}"
+  become: yes
+  no_log: true
+
+- name: Asegurar known_hosts (GitHub)
+  known_hosts:
+    name: github.com
+    key: "{{ lookup('pipe', 'ssh-keyscan -t rsa,ecdsa,ed25519 github.com') }}"
+    path: "/home/{{ kiosk_user }}/.ssh/known_hosts"
+  become: yes
+  become_user: "{{ kiosk_user }}"
+
+# Solo si tu remoto de signage usa git@github-signage:...
+- name: Config ~/.ssh/config con alias github-signage
+  blockinfile:
+    path: "/home/{{ kiosk_user }}/.ssh/config"
+    create: yes
+    owner: "{{ kiosk_user }}"
+    group: "{{ kiosk_user }}"
+    mode: "0600"
+    block: |
+      Host github.com
+        User git
+        IdentityFile ~/.ssh/id_ed25519_electron
+        IdentitiesOnly yes
+
+      Host github-signage
+        HostName github.com
+        User git
+        IdentityFile ~/.ssh/id_ed25519_signage
+        IdentitiesOnly yes
+  when: electron_repo is search('github-signage') or signage_repo is search('github-signage')
+  become: yes
 
 # ---------- Clonar/actualizar repos ----------
 - name: Clonar/actualizar electron_rasp
@@ -85,7 +87,7 @@
     version: main
     force: yes
     accept_hostkey: yes
-    # key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519_electron"  # si usas deploy key en el target
+    key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519_electron"  # si usas deploy key en el target
   become: yes
   become_user: "{{ kiosk_user }}"
 
@@ -96,7 +98,7 @@
     version: main
     force: yes
     accept_hostkey: yes
-    # key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519_signage"
+    key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519_signage"
   become: yes
   become_user: "{{ kiosk_user }}"
 
