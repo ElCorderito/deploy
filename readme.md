@@ -1,4 +1,4 @@
-# Guía rápida (copy-paste) para dejar una Raspberry nueva lista con tu kiosko
+# Guía rápida para dejar una Raspberry nueva lista con tu kiosko
 
 > Esta guía asume **Raspberry Pi OS con escritorio** (la que ofrece el Imager), **Pi 5**, y que vas a correr **Ansible en la misma Raspberry** (más simple). Si prefieres correr Ansible desde tu laptop, te dejo notas al final.
 
