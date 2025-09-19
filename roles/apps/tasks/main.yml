@@ -6,6 +6,13 @@
     update_cache: yes
   become: yes
 
+- name: Instalar unclutter (oculta cursor inactivo)
+  apt:
+    name: unclutter
+    state: present
+    update_cache: yes
+  become: yes
+
 # ---------- Directorios ----------
 - name: Crear directorios base
   file:
@@ -254,6 +261,28 @@
     enabled: yes
     state: started
   when: manage_lightdm
+  become: yes
+
+- name: Crear carpeta de autostart del usuario
+  file:
+    path: "/home/{{ kiosk_user }}/.config/lxsession/{{ lightdm_session }}"
+    state: directory
+    owner: "{{ kiosk_user }}"
+    group: "{{ kiosk_user }}"
+    mode: "0755"
+  become: yes
+
+- name: Configurar autostart (unclutter + xset) en LXDE
+  copy:
+    dest: "/home/{{ kiosk_user }}/.config/lxsession/{{ lightdm_session }}/autostart"
+    owner: "{{ kiosk_user }}"
+    group: "{{ kiosk_user }}"
+    mode: "0644"
+    content: |
+      @xset s off
+      @xset -dpms
+      @xset s noblank
+      @unclutter -idle 1 -root -noevents
   become: yes
 
 # ---------- Remotos (AnyDesk/TeamViewer): sólo habilitar ----------

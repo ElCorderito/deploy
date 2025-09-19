@@ -7,10 +7,14 @@ StartLimitBurst=0
 
 [Service]
 User={{ kiosk_user }}
+WorkingDirectory={{ electron_app_dir }}
+
 Environment=DISPLAY=:0
 Environment="BRANCH_ID={{ BRANCH_ID }}"
-WorkingDirectory={{ electron_app_dir }}
+Environment="KIOSK_URL=http://127.0.0.1:5000"
+Environment="SPAWN_FLASK=0"
 ExecStart=/usr/bin/npm run electron
+
 KillMode=control-group
 TimeoutStopSec=15s
 Restart=always
