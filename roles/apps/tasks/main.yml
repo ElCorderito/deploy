@@ -285,6 +285,21 @@
       @unclutter -idle 1 -root -noevents
   become: yes
 
+- name: Instalar unit signage-update.service
+  template:
+    src: signage-update.service.j2
+    dest: /etc/systemd/system/signage-update.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload systemd
+
+- name: Asegurar timer habilitado
+  systemd:
+    name: signage-update.timer
+    enabled: yes
+    state: started
+
 # ---------- Remotos (AnyDesk/TeamViewer): sólo habilitar ----------
 - name: Habilitar servicios de remoto (si existen)
   systemd:
