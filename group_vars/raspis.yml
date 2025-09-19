@@ -7,7 +7,7 @@ signage_root:  /opt/signage
 
 # Usa estos remotos (puedes dejarlos igual que en tu Pi)
 electron_repo: "git@github.com:ElCorderito/electron_rasp.git"
-signage_repo:  "git@github.com:ElCorderito/signage.git"   # (si quieres alias github-signage, ver bloque ~/.ssh/config más abajo)
+signage_repo: "git@github-signage:ElCorderito/signage.git"
 
 # Usuario que corre los servicios de tu app (normalmente el ansible_user)
 kiosk_user: "{{ ansible_user }}"

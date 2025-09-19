@@ -2,27 +2,23 @@
 Description=Pull signage repo y reinicia electron_rasp si cambia
 After=network-online.target
 Wants=network-online.target
-ConditionPathExists=/opt/signage/signage/.git
+ConditionPathExists={{ signage_root }}/signage/.git
 
 [Service]
 Type=oneshot
-User=rasp-trolley
-Group=rasp-trolley
-WorkingDirectory=/opt/signage/signage
+User={{ kiosk_user }}
+Group={{ kiosk_user }}
+WorkingDirectory={{ signage_root }}/signage
 
-# 🔒 Asegura entorno correcto para git/ssh
-Environment=HOME=/home/rasp-trolley
+# Entorno correcto + fuerza llave de signage (cinturón y tirantes)
+Environment=HOME=/home/{{ kiosk_user }}
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-Environment=GIT_SSH_COMMAND=/usr/bin/ssh -o IdentitiesOnly=yes -i /home/rasp-trolley/.ssh/id_ed25519_signage -o StrictHostKeyChecking=accept-new
+Environment=GIT_SSH_COMMAND=/usr/bin/ssh -o IdentitiesOnly=yes -i /home/{{ kiosk_user }}/.ssh/id_ed25519_segundo -o StrictHostKeyChecking=accept-new
 
-# Si usas variables extra:
-# EnvironmentFile=-/etc/default/signage-update
-
-ExecStart=/opt/signage/signage/update.sh
+ExecStart={{ signage_root }}/signage/update.sh
 StandardOutput=journal
 StandardError=journal
 
-# Seguridad razonable para oneshot
 PrivateTmp=yes
 ProtectSystem=full
 ProtectHome=no

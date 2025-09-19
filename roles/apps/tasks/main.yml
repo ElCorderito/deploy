@@ -26,7 +26,7 @@
     - "{{ signage_root }}"
   become: yes
 
-# --- SSH keys en el target (NECESARIO si los repos son privados) ---
+# --- SSH keys en el target ---
 - name: Crear ~/.ssh
   file:
     path: "/home/{{ kiosk_user }}/.ssh"
@@ -36,20 +36,21 @@
     mode: "0700"
   become: yes
 
-- name: Copiar llave electron (Vault)
+# Si tus secretos se llaman id_ed25519_electron / id_ed25519_signage, usa esos en src:
+- name: Copiar llave general (electron)
   copy:
     src: "{{ playbook_dir }}/secrets/id_ed25519_electron"
-    dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519_electron"
+    dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519"            # <-- nombre destino estandar
     mode: "0600"
     owner: "{{ kiosk_user }}"
     group: "{{ kiosk_user }}"
   become: yes
   no_log: true
 
-- name: Copiar llave signage (Vault)
+- name: Copiar llave signage
   copy:
     src: "{{ playbook_dir }}/secrets/id_ed25519_signage"
-    dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519_signage"
+    dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519_segundo"    # <-- nombre destino estandar
     mode: "0600"
     owner: "{{ kiosk_user }}"
     group: "{{ kiosk_user }}"
@@ -61,10 +62,11 @@
     name: github.com
     key: "{{ lookup('pipe', 'ssh-keyscan -t rsa,ecdsa,ed25519 github.com') }}"
     path: "/home/{{ kiosk_user }}/.ssh/known_hosts"
+    state: present
   become: yes
   become_user: "{{ kiosk_user }}"
 
-- name: Configurar ~/.ssh/config para usar la key de electron en github.com
+- name: Configurar ~/.ssh/config (default + alias github-signage)
   blockinfile:
     path: "/home/{{ kiosk_user }}/.ssh/config"
     create: yes
@@ -73,9 +75,18 @@
     mode: "0600"
     block: |
       Host github.com
+        HostName github.com
         User git
-        IdentityFile ~/.ssh/id_ed25519_electron
+        IdentityFile ~/.ssh/id_ed25519
         IdentitiesOnly yes
+        StrictHostKeyChecking accept-new
+
+      Host github-signage
+        HostName github.com
+        User git
+        IdentityFile ~/.ssh/id_ed25519_segundo
+        IdentitiesOnly yes
+        StrictHostKeyChecking accept-new
   become: yes
 
 # Solo si tu remoto de signage usa git@github-signage:...
@@ -108,7 +119,7 @@
     version: "{{ electron_branch }}"
     force: yes
     accept_hostkey: yes
-    key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519_electron"
+    key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519"
   become: yes
   become_user: "{{ kiosk_user }}"
 
@@ -119,7 +130,7 @@
     version: "{{ signage_branch }}"
     force: yes
     accept_hostkey: yes
-    key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519_signage"
+    key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519_segundo"
   become: yes
   become_user: "{{ kiosk_user }}"
 
