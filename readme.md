@@ -19,8 +19,7 @@
 
 ```bash
 sudo apt update
-sudo apt install -y git ansible python3-venv python3-pip nodejs npm avahi-daemon libnss-mdns
-sudo systemctl enable --now avahi-daemon
+sudo apt install -y git ansible python3-venv python3-pip nodejs npm libnss-mdns
 ```
 
 > `avahi-daemon` solo es necesario si luego quieres acceder por `hostname.local`. Como aquí correrás Ansible **en la misma Pi**, puedes ignorarlo.
