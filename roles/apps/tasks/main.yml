@@ -36,11 +36,10 @@
     mode: "0700"
   become: yes
 
-# Si tus secretos se llaman id_ed25519_electron / id_ed25519_signage, usa esos en src:
-- name: Copiar llave general (electron)
+- name: Copiar llave electron
   copy:
     src: "{{ playbook_dir }}/secrets/id_ed25519_electron"
-    dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519"            # <-- nombre destino estandar
+    dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519_electron"
     mode: "0600"
     owner: "{{ kiosk_user }}"
     group: "{{ kiosk_user }}"
@@ -50,7 +49,7 @@
 - name: Copiar llave signage
   copy:
     src: "{{ playbook_dir }}/secrets/id_ed25519_signage"
-    dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519_segundo"    # <-- nombre destino estandar
+    dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519_signage"
     mode: "0600"
     owner: "{{ kiosk_user }}"
     group: "{{ kiosk_user }}"
@@ -77,14 +76,15 @@
       Host github.com
         HostName github.com
         User git
-        IdentityFile ~/.ssh/id_ed25519
+        IdentityFile ~/.ssh/id_ed25519_electron
         IdentitiesOnly yes
         StrictHostKeyChecking accept-new
 
+      # Usa este alias solo si el remoto de signage es git@github-signage:...
       Host github-signage
         HostName github.com
         User git
-        IdentityFile ~/.ssh/id_ed25519_segundo
+        IdentityFile ~/.ssh/id_ed25519_signage
         IdentitiesOnly yes
         StrictHostKeyChecking accept-new
   become: yes
@@ -119,7 +119,7 @@
     version: "{{ electron_branch }}"
     force: yes
     accept_hostkey: yes
-    key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519"
+    key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519_electron"
   become: yes
   become_user: "{{ kiosk_user }}"
 
@@ -130,7 +130,7 @@
     version: "{{ signage_branch }}"
     force: yes
     accept_hostkey: yes
-    key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519_segundo"
+    key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519_signage"
   become: yes
   become_user: "{{ kiosk_user }}"
 
