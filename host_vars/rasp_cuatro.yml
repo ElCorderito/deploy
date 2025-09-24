@@ -1,0 +1,3 @@
+SCREEN_ID: rasp_cuatro
+BRANCH_ID: 4     # cámbialo si esa Raspberry debe mostrar otra sucursal/branch
+KIOSK_URL: "http://localhost:3000"
