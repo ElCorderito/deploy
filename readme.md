@@ -26,9 +26,14 @@ sudo apt install -y git ansible python3-venv python3-pip nodejs npm libnss-mdns
 
 ---
 
-## 2) (Opcional) Instala AnyDesk y TeamViewer
+## 2) Instala AnyDesk y TeamViewer
 
 * Descarga e instala sus `.deb` oficiales (o usa su repo apt si ya lo tienes).
+
+   ```bash
+   sudo dpkg -i nombre_del_paquete.deb
+   ```
+
 * Habilita servicios:
 
   ```bash
