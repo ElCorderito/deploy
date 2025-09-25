@@ -10,7 +10,7 @@
 2. Enciende la Pi y actualiza rápido:
 
    ```bash
-   sudo apt update && sudo apt -y full-upgrade && sudo reboot
+   sudo apt update && sudo apt -y full-upgrade
    ```
 
 ---
@@ -19,7 +19,7 @@
 
 ```bash
 sudo apt update
-sudo apt install -y git ansible python3-venv python3-pip nodejs npm libnss-mdns
+sudo apt install -y git ansible python3-venv python3-pip nodejs npm
 ```
 
 > `avahi-daemon` solo es necesario si luego quieres acceder por `hostname.local`. Como aquí correrás Ansible **en la misma Pi**, puedes ignorarlo.
@@ -31,6 +31,7 @@ sudo apt install -y git ansible python3-venv python3-pip nodejs npm libnss-mdns
 * Descarga e instala sus `.deb` oficiales (o usa su repo apt si ya lo tienes).
 
    ```bash
+   cd Downloads
    sudo dpkg -i nombre_del_paquete.deb
    ```
 
