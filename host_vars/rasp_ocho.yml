@@ -1,0 +1,3 @@
+SCREEN_ID: rasp_ocho
+BRANCH_ID: 6
+KIOSK_URL: "http://localhost:3000"
