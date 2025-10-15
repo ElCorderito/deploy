@@ -311,13 +311,44 @@
     enabled: yes
     state: started
 
-# ---------- Remotos (AnyDesk/TeamViewer): sólo habilitar ----------
-- name: Habilitar servicios de remoto (si existen)
+# --- Remotos (AnyDesk/TeamViewer): asegurar des-mask, enable y start ---
+
+- name: Recoger facts de servicios
+  service_facts:
+
+# (Opcional pero útil) Quitar hard-mask si existe (/etc/systemd/system/<svc> -> /dev/null)
+- name: Quitar hard-mask de teamviewerd si apunta a /dev/null
+  stat:
+    path: /etc/systemd/system/teamviewerd.service
+  register: tvd_unit
+  become: yes
+
+- name: Eliminar symlink / hard-mask de teamviewerd
+  file:
+    path: /etc/systemd/system/teamviewerd.service
+    state: absent
+  when: tvd_unit.stat.islnk is defined and tvd_unit.stat.islnk and tvd_unit.stat.lnk_target == '/dev/null'
+  become: yes
+
+- name: daemon-reload por si quitamos hard-mask
+  systemd:
+    daemon_reload: yes
+  become: yes
+
+# Unmask + enable + start para cada remoto que exista en el host
+- name: Asegurar remotos unmasked/enabled/running
   systemd:
     name: "{{ item }}"
+    masked: no               # ← clave para evitar el 'is masked'
     enabled: yes
     state: started
   loop: "{{ remote_services }}"
-  when: enable_remote_services
-  ignore_errors: true
+  when: item in ansible_facts.services | default({})  # sólo si el servicio existe
+  register: remote_result
+  failed_when: false         # no ocultes todo; sólo evita que el play muera
   become: yes
+
+# (Opcional) Mostrar qué pasó con cada remoto
+- name: Debug de remotos
+  debug:
+    var: remote_result.results | map(attribute='name') | list
