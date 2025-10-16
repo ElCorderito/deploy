@@ -32,7 +32,7 @@
   ignore_errors: yes
   register: cec_install
 
-- name: Aviso: cec-utils no se pudo instalar, se deja opcional
+- name: Aviso cec-utils no se pudo instalar, se deja opcional
   debug:
     msg: "cec-utils falló por dependencias (mezcla de versiones). Seguimos sin CEC."
   when: cec_install is failed
