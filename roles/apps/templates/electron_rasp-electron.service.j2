@@ -1,6 +1,7 @@
 [Unit]
 Description=Electron kiosk (electron_rasp)
 After=graphical.target electron_rasp-flask.service
+Wants=graphical.target
 Requires=electron_rasp-flask.service
 StartLimitIntervalSec=0
 StartLimitBurst=0
@@ -10,15 +11,19 @@ User={{ kiosk_user }}
 WorkingDirectory={{ electron_app_dir }}
 
 Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/{{ kiosk_user }}/.Xauthority
 Environment="BRANCH_ID={{ BRANCH_ID }}"
 Environment="KIOSK_URL=http://127.0.0.1:5000"
 Environment="SPAWN_FLASK=0"
+
+# dar 2s para que el display esté 100% listo
+ExecStartPre=/bin/sleep 2
 ExecStart=/usr/bin/npm run electron
 
 KillMode=control-group
 TimeoutStopSec=15s
 Restart=always
-RestartSec=5s
+RestartSec=2s
 StandardOutput=journal
 StandardError=journal
 

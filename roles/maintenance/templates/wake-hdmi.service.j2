@@ -1,0 +1,11 @@
+[Unit]
+Description=Wake HDMI/TV when graphical session is up
+After=graphical.target
+Wants=graphical.target
+
+[Service]
+Type=oneshot
+User={{ kiosk_user }}
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/{{ kiosk_user }}/.Xauthority
+ExecStart=/usr/local/bin/wake_hdmi.sh

@@ -13,6 +13,16 @@
     update_cache: yes
   become: yes
 
+- name: Paquetes para control de display (xset/cec)
+  apt:
+    name:
+      - x11-xserver-utils
+      - cec-utils
+      - libraspberrypi-bin
+    state: present
+    update_cache: yes
+  become: yes
+
 # ---------- Directorios ----------
 - name: Crear directorios base
   file:
@@ -283,7 +293,7 @@
     mode: "0755"
   become: yes
 
-- name: Configurar autostart (unclutter + xset) en LXDE
+- name: Autostart LXDE sin DPMS
   copy:
     dest: "/home/{{ kiosk_user }}/.config/lxsession/{{ lightdm_session }}/autostart"
     owner: "{{ kiosk_user }}"
@@ -293,7 +303,7 @@
       @xset s off
       @xset -dpms
       @xset s noblank
-      @unclutter -idle 1 -root -noevents
+      @unclutter -idle 0.5 -root
   become: yes
 
 - name: Instalar unit signage-update.service

@@ -1,4 +1,26 @@
 ---
+# Detecta path correcto (Bookworm usa /boot/firmware)
+- name: Detectar config.txt
+  stat:
+    path: /boot/firmware/config.txt
+  register: fw
+
+- name: Set rpi_config_path
+  set_fact:
+    rpi_config_path: "{{ '/boot/firmware/config.txt' if fw.stat.exists else '/boot/config.txt' }}"
+
+- name: Forzar HDMI y 1080p60
+  blockinfile:
+    path: "{{ rpi_config_path }}"
+    marker: "# {mark} Ansible kiosk HDMI"
+    block: |
+      hdmi_force_hotplug=1
+      hdmi_drive=2
+      hdmi_group=1
+      hdmi_mode=16
+      disable_overscan=1
+  become: yes
+
 - name: Instalar script de mantenimiento
   copy:
     src: rpi_maintenance.sh
@@ -27,4 +49,40 @@
     name: rpi-maintenance.timer
     enabled: yes
     state: started
+  become: yes
+
+- name: Instalar wake_hdmi.sh
+  copy:
+    src: wake_hdmi.sh
+    dest: /usr/local/bin/wake_hdmi.sh
+    mode: "0755"
+  become: yes
+
+- name: Instalar wake-hdmi.service
+  template:
+    src: wake-hdmi.service.j2
+    dest: /etc/systemd/system/wake-hdmi.service
+    mode: "0644"
+  notify: reload systemd
+  become: yes
+
+- name: Instalar wake-hdmi.timer
+  template:
+    src: wake-hdmi.timer.j2
+    dest: /etc/systemd/system/wake-hdmi.timer
+    mode: "0644"
+  notify: reload systemd
+  become: yes
+
+- name: Habilitar wake-hdmi.service
+  systemd:
+    name: wake-hdmi.service
+    enabled: yes
+  become: yes
+
+- name: Arrancar+Habilitar wake-hdmi.timer
+  systemd:
+    name: wake-hdmi.timer
+    state: started
+    enabled: yes
   become: yes
