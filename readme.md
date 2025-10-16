@@ -111,42 +111,7 @@ KIOSK_URL: "http://localhost:3000"
 
 ---
 
-## 6) Verifica que el role **apps** tenga activadas las claves
-
-Revisa `deploy/roles/apps/tasks/main.yml` y confirma que:
-
-* Está el **bloque SSH** que copia las llaves a `~/.ssh` del `kiosk_user`.
-* En **cada tarea `git`** está activo `key_file:`. Debe verse así:
-
-```yaml
-- name: Clonar/actualizar electron_rasp
-  git:
-    repo: "{{ electron_repo }}"
-    dest: "{{ electron_root }}/electron_rasp"
-    version: "{{ electron_branch }}"
-    force: yes
-    accept_hostkey: yes
-    key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519_electron"
-  become: yes
-  become_user: "{{ kiosk_user }}"
-
-- name: Clonar/actualizar signage
-  git:
-    repo: "{{ signage_repo }}"
-    dest: "{{ signage_root }}/signage"
-    version: "{{ signage_branch }}"
-    force: yes
-    accept_hostkey: yes
-    key_file: "/home/{{ kiosk_user }}/.ssh/id_ed25519_signage"
-  become: yes
-  become_user: "{{ kiosk_user }}"
-```
-
-> Si dejaste `signage_repo` con `github.com`, **no necesitas** alias `github-signage` (puedes ignorar esa tarea).
-
----
-
-## 7) Ejecuta Ansible
+## 6) Ejecuta Ansible
 
 Prueba ping (debería decir “pong”):
 
@@ -174,7 +139,7 @@ Qué hará:
 
 ---
 
-## 8) Verificación rápida
+## 7) Verificación rápida
 
 ```bash
 systemctl status electron_rasp-flask.service
@@ -192,7 +157,7 @@ sudo reboot
 
 ---
 
-## 9) ¿Y si la IP cambia?
+## 8) ¿Y si la IP cambia?
 
 Como corres Ansible en la misma Pi, usas `127.0.0.1` y te olvidas.
 Si algún día corres Ansible desde otra máquina, usa:
@@ -206,7 +171,7 @@ y asegúrate de tener `avahi-daemon` en la Pi y `libnss-mdns` en la máquina de 
 
 ---
 
-## 10) Añadir otra Raspberry (ej. `rasp_otay`) en 1 minuto
+## 9) Añadir otra Raspberry (ej. `rasp_otay`) en 1 minuto
 
 1. En `inventory.ini`, agrega:
 
@@ -233,7 +198,7 @@ y asegúrate de tener `avahi-daemon` en la Pi y `libnss-mdns` en la máquina de 
 
 ---
 
-## 11) Troubleshooting express
+## 10) Troubleshooting express
 
 * **`Permission denied (publickey)` al clonar** → deploy keys mal cargadas o mal `key_file:`. Revisa que las **.pub** estén en GitHub (Deploy keys) y que Ansible copió las privadas a `~/.ssh` del `kiosk_user`.
 * **`pathspec 'main' did not match`** → cambia `electron_branch`/`signage_branch` a la rama real (`master`/`main`).
@@ -241,7 +206,3 @@ y asegúrate de tener `avahi-daemon` en la Pi y `libnss-mdns` en la máquina de 
 * **signage no se actualiza** → mira `systemctl status signage-update.timer` y el log del service `signage-update`.
 
 ---
-
-### Listo. Con esto, prendes, sigues los pasos y quedas con la Pi lista (remoto, auto-pull, servicios/timers y kiosko).
-
-Si algo te truena al correr el playbook, copia el error tal cual y te digo la línea exacta a corregir.
