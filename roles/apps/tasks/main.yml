@@ -13,15 +13,27 @@
     update_cache: yes
   become: yes
 
-- name: Paquetes para control de display (xset/cec)
+# Lo esencial para pantalla:
+- name: Paquetes base de display (x11/xset)
   apt:
     name:
       - x11-xserver-utils
-      - cec-utils
-      - libraspberrypi-bin
     state: present
     update_cache: yes
   become: yes
+
+# CEC es opcional: si falla, seguimos
+- block:
+    - name: Instalar cec-utils (opcional)
+      apt:
+        name: cec-utils
+        state: present
+        update_cache: yes
+      become: yes
+  rescue:
+    - name: Aviso: cec-utils no se pudo instalar, se deja opcional
+      debug:
+        msg: "cec-utils falló por dependencias (mezcla de repos/versions). Seguimos sin CEC."
 
 # ---------- Directorios ----------
 - name: Crear directorios base
