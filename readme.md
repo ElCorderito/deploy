@@ -99,63 +99,7 @@ rasp_trolley ansible_host=127.0.0.1 ansible_connection=local ansible_user=rasp-t
 
 > Cambia `rasp-trolley` por tu usuario real si es distinto.
 
-### 5.2 `deploy/group_vars/raspis.yml` (comunes)
-
-Crea/edita y deja así (ajusta ramas según tu GitHub; si dudaste, usa `master` para electron y `main` para signage):
-
-```yaml
-# Rutas base
-electron_root: /opt/electron_rasp
-signage_root:  /opt/signage
-
-# Repos
-electron_repo: "git@github.com:ElCorderito/electron_rasp.git"
-signage_repo:  "git@github.com:ElCorderito/signage.git"
-
-# Ramas por defecto del remoto
-electron_branch: master
-signage_branch:  master
-
-# Usuario que ejecuta los servicios (normalmente tu ansible_user)
-kiosk_user: "{{ ansible_user }}"
-
-# Python / Electron
-python_bin:       /usr/bin/python3.11
-venv_dir:         "{{ electron_root }}/venv"
-flask_app_dir:    "{{ electron_root }}/electron_rasp/flask_app"
-requirements_file:"{{ electron_root }}/electron_rasp/requirements.txt"
-electron_app_dir: "{{ electron_root }}/electron_rasp/electron"
-
-# Timers
-electron_update_every: "2min"
-signage_update_every:  "10min"
-maintenance_hour:      "03:00:00"
-
-# Paquetes base (kiosko + X)
-apt_base_packages:
-  - git
-  - python3.11
-  - python3.11-venv
-  - python3-pip
-  - nodejs
-  - npm
-  - lxde
-  - lightdm
-  - xserver-xorg
-
-# Autologin (opcional; útil si tu imagen aún no lo tenía)
-manage_lightdm: true
-lightdm_autologin_user: "{{ kiosk_user }}"
-lightdm_session: "LXDE-pi-x"
-
-# Remotos (solo habilitar si ya están instalados)
-enable_remote_services: true
-remote_services:
-  - anydesk.service
-  - teamviewerd.service
-```
-
-### 5.3 `deploy/host_vars/rasp_trolley.yml` (por host)
+### 5.2 `deploy/host_vars/rasp_trolley.yml` (por host)
 
 ```yaml
 SCREEN_ID: rasp_trolley
