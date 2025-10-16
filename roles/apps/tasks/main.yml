@@ -311,44 +311,114 @@
     enabled: yes
     state: started
 
-# --- Remotos (AnyDesk/TeamViewer): asegurar des-mask, enable y start ---
+# --- TeamViewer/AnyDesk: endurecer arranque y diagnóstico ---
 
 - name: Recoger facts de servicios
   service_facts:
 
-# (Opcional pero útil) Quitar hard-mask si existe (/etc/systemd/system/<svc> -> /dev/null)
-- name: Quitar hard-mask de teamviewerd si apunta a /dev/null
+# 1) Normaliza lista de remotos (cubre teamviewer y teamviewerd)
+- name: Construir lista final de remotos
+  set_fact:
+    remote_services_final: >-
+      {{ (remote_services | default([])) 
+         + ['teamviewer.service', 'teamviewerd.service'] | unique }}
+
+# 2) Quitar hard-mask si existe (symlink -> /dev/null)
+- name: Detectar hard-mask (symlink a /dev/null)
   stat:
-    path: /etc/systemd/system/teamviewerd.service
+    path: "/etc/systemd/system/teamviewerd.service"
   register: tvd_unit
   become: yes
 
-- name: Eliminar symlink / hard-mask de teamviewerd
+- name: Eliminar hard-mask de teamviewerd
   file:
-    path: /etc/systemd/system/teamviewerd.service
+    path: "/etc/systemd/system/teamviewerd.service"
     state: absent
   when: tvd_unit.stat.islnk is defined and tvd_unit.stat.islnk and tvd_unit.stat.lnk_target == '/dev/null'
   become: yes
 
-- name: daemon-reload por si quitamos hard-mask
+- name: systemd daemon-reload tras quitar hard-mask
   systemd:
     daemon_reload: yes
   become: yes
 
-# Unmask + enable + start para cada remoto que exista en el host
-- name: Asegurar remotos unmasked/enabled/running
-  systemd:
-    name: "{{ item }}"
-    masked: no               # ← clave para evitar el 'is masked'
-    enabled: yes
-    state: started
-  loop: "{{ remote_services }}"
-  when: item in ansible_facts.services | default({})  # sólo si el servicio existe
-  register: remote_result
-  failed_when: false         # no ocultes todo; sólo evita que el play muera
+# 3) Drop-in para hacer el servicio más resiliente (restart + network-online)
+- name: Crear carpeta de drop-ins para teamviewerd
+  file:
+    path: /etc/systemd/system/teamviewerd.service.d
+    state: directory
+    mode: "0755"
   become: yes
 
-# (Opcional) Mostrar qué pasó con cada remoto
-- name: Debug de remotos
+- name: Drop-in override de teamviewerd (Restart + After network-online)
+  copy:
+    dest: /etc/systemd/system/teamviewerd.service.d/override.conf
+    mode: "0644"
+    content: |
+      [Unit]
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Restart=on-failure
+      RestartSec=3s
+  notify: reload systemd
+  become: yes
+
+# 4) Unmask + enable + start vía systemd para cada servicio que exista
+- name: Asegurar remotos unmasked/enabled/started (systemd)
+  systemd:
+    name: "{{ item }}"
+    masked: no
+    enabled: yes
+    state: started
+  loop: "{{ remote_services_final }}"
+  when: item in (ansible_facts.services | default({}))  # Sólo si el unit existe
+  register: tv_systemd
+  failed_when: false
+  become: yes
+
+# 5) Arranque vía CLI por compatibilidad con versiones antiguas (no falla si no existe)
+- name: teamviewer --daemon enable (compat)
+  command: teamviewer --daemon enable
+  register: tv_enable_cli
+  changed_when: "'Enabling' in tv_enable_cli.stdout or 'enable' in tv_enable_cli.stdout or tv_enable_cli.rc == 0"
+  failed_when: false
+  become: yes
+
+- name: teamviewer --daemon start (compat)
+  command: teamviewer --daemon start
+  register: tv_start_cli
+  changed_when: "'Starting' in tv_start_cli.stdout or 'start' in tv_start_cli.stdout or tv_start_cli.rc == 0"
+  failed_when: false
+  become: yes
+
+# 6) Esperar a que realmente quede activo
+- name: Esperar a que teamviewerd quede activo
+  shell: "systemctl is-active teamviewerd.service || systemctl is-active teamviewer.service"
+  register: tv_active
+  retries: 8
+  delay: 2
+  until: tv_active.stdout is search('active')
+  changed_when: false
+  failed_when: false
+  become: yes
+
+# 7) Si sigue sin levantar, traer logs para diagnóstico en el output del play
+- name: Traer logs de teamviewerd si no está activo
+  shell: "journalctl -u teamviewerd --no-pager -n 200 || true"
+  register: tv_journal
+  when: tv_active.stdout is not search('active')
+  changed_when: false
+  failed_when: false
+  become: yes
+
+- name: Mostrar resumen de estado y logs si hubo problema
   debug:
-    var: remote_result.results | map(attribute='name') | list
+    msg:
+      - "systemd result: {{ tv_systemd.results | map(attribute='name') | list }}"
+      - "CLI enable rc={{ tv_enable_cli.rc }} start rc={{ tv_start_cli.rc }}"
+      - "is-active: {{ tv_active.stdout | default('n/a') }}"
+      - "journal (ultimas lineas):"
+      - "{{ tv_journal.stdout_lines | default(['<sin logs>']) }}"
+  when: tv_active.stdout is not search('active')
