@@ -22,19 +22,20 @@
     update_cache: yes
   become: yes
 
-# CEC opcional: si falla, seguimos sin romper el play
-- name: Instalar cec-utils de forma opcional
-  block:
-    - name: Instalar cec-utils (opcional)
-      apt:
-        name: cec-utils
-        state: present
-        update_cache: yes
-      become: yes
-  rescue:
-    - name: Aviso: cec-utils no se pudo instalar, se deja opcional
-      debug:
-        msg: "cec-utils falló por dependencias (mezcla de versiones). Seguimos sin CEC."
+# CEC opcional: intenta instalar y si falla, no rompas el play
+- name: Instalar cec-utils (opcional)
+  apt:
+    name: cec-utils
+    state: present
+    update_cache: yes
+  become: yes
+  ignore_errors: yes
+  register: cec_install
+
+- name: Aviso: cec-utils no se pudo instalar, se deja opcional
+  debug:
+    msg: "cec-utils falló por dependencias (mezcla de versiones). Seguimos sin CEC."
+  when: cec_install is failed
 
 # ---------- Directorios ----------
 - name: Crear directorios base
