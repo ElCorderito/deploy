@@ -336,20 +336,20 @@
     state: started
   become: yes
 
-# --- TeamViewer/AnyDesk: endurecer arranque y diagnóstico ---
+# --- TeamViewer/AnyDesk: arranque robusto y verificación ---
 
 - name: Recoger facts de servicios
   service_facts:
 
-# 1) Normaliza lista de remotos (cubre teamviewer y teamviewerd)
-- name: Construir lista final de remotos
+# Incluye explícitamente anydesk.service y ambos units de TeamViewer
+- name: Construir lista final de remotos (incluye AnyDesk/TeamViewer)
   set_fact:
     remote_services_final: >-
       {{ ((remote_services | default([]))
-          + ['teamviewer.service', 'teamviewerd.service']) | unique }}
+          + ['anydesk.service', 'teamviewer.service', 'teamviewerd.service']) | unique }}
 
-# 2) Quitar hard-mask si existe (symlink -> /dev/null)
-- name: Detectar hard-mask (symlink a /dev/null)
+# Quitar hard-mask si existe (teamviewerd)
+- name: Detectar hard-mask (teamviewerd)
   stat:
     path: "/etc/systemd/system/teamviewerd.service"
   register: tvd_unit
@@ -362,12 +362,48 @@
   when: tvd_unit.stat.islnk is defined and tvd_unit.stat.islnk and tvd_unit.stat.lnk_target == '/dev/null'
   become: yes
 
-- name: systemd daemon-reload tras quitar hard-mask
+# Quitar hard-mask si existe (anydesk) — opcional pero recomendable
+- name: Detectar hard-mask (anydesk)
+  stat:
+    path: "/etc/systemd/system/anydesk.service"
+  register: ad_unit
+  become: yes
+
+- name: Eliminar hard-mask de anydesk
+  file:
+    path: "/etc/systemd/system/anydesk.service"
+    state: absent
+  when: ad_unit.stat.islnk is defined and ad_unit.stat.islnk and ad_unit.stat.lnk_target == '/dev/null'
+  become: yes
+
+- name: systemd daemon-reload tras quitar masks
   systemd:
     daemon_reload: yes
   become: yes
 
-# 3) Drop-in para hacer el servicio más resiliente (restart + network-online)
+# Drop-ins para hacerlos resilientes (arrancar tras red y reintentar si fallan)
+- name: Crear carpeta de drop-ins para anydesk
+  file:
+    path: /etc/systemd/system/anydesk.service.d
+    state: directory
+    mode: "0755"
+  become: yes
+
+- name: Drop-in override de anydesk (Restart + After network-online)
+  copy:
+    dest: /etc/systemd/system/anydesk.service.d/override.conf
+    mode: "0644"
+    content: |
+      [Unit]
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Restart=on-failure
+      RestartSec=3s
+  notify: reload systemd
+  become: yes
+
 - name: Crear carpeta de drop-ins para teamviewerd
   file:
     path: /etc/systemd/system/teamviewerd.service.d
@@ -390,7 +426,7 @@
   notify: reload systemd
   become: yes
 
-# 4) Unmask + enable + start vía systemd para cada servicio que exista
+# Unmask + enable + start para cada servicio que exista en el sistema
 - name: Asegurar remotos unmasked/enabled/started (systemd)
   systemd:
     name: "{{ item }}"
@@ -398,12 +434,12 @@
     enabled: yes
     state: started
   loop: "{{ remote_services_final }}"
-  when: item in (ansible_facts.services | default({}))  # Sólo si el unit existe
-  register: tv_systemd
+  when: item in (ansible_facts.services | default({}))
+  register: remote_systemd
   failed_when: false
   become: yes
 
-# 5) Arranque vía CLI por compatibilidad con versiones antiguas (no falla si no existe)
+# Compatibilidad con versiones antiguas de TeamViewer (CLI)
 - name: teamviewer --daemon enable (compat)
   command: teamviewer --daemon enable
   register: tv_enable_cli
@@ -418,120 +454,16 @@
   failed_when: false
   become: yes
 
-# 6) Esperar a que realmente quede activo
-- name: Esperar a que teamviewerd quede activo
-  shell: "systemctl is-active teamviewerd.service || systemctl is-active teamviewer.service"
-  register: tv_active
-  retries: 8
+# Esperar a que queden realmente activos (cubre AnyDesk y TeamViewer)
+- name: Esperar a que remotos queden activos
+  shell: "systemctl is-active {{ item }}"
+  register: wait_active
+  retries: 10
   delay: 2
-  until: tv_active.rc == 0
+  until: wait_active.rc == 0
   changed_when: false
   failed_when: false
+  loop: "{{ remote_services_final
+            | select('in', (ansible_facts.services | default({})).keys())
+            | list }}"
   become: yes
-
-- name: Traer logs de teamviewerd si no está activo
-  shell: "journalctl -u teamviewerd --no-pager -n 200 || true"
-  register: tv_journal
-  when: tv_active.rc != 0
-  changed_when: false
-  failed_when: false
-  become: yes
-
-- name: Mostrar resumen de estado y logs si hubo problema
-  debug:
-    msg:
-      - "systemd result: {{ tv_systemd.results | map(attribute='name') | list }}"
-      - "CLI enable rc={{ tv_enable_cli.rc }} start rc={{ tv_start_cli.rc }}"
-      - "is-active: {{ tv_active.stdout | default('n/a') }}"
-      - "journal (ultimas lineas):"
-      - "{{ tv_journal.stdout_lines | default(['<sin logs>']) }}"
-  when: tv_active.rc != 0
-
-# --- AnyDesk: Unattended Access con contraseña fija ---
-
-- name: AnyDesk | asegurar servicio arriba
-  systemd:
-    name: anydesk.service
-    enabled: yes
-    state: started
-  become: yes
-  failed_when: false
-
-# --- AnyDesk: poner contraseña unattended con 3 métodos ---
-
-# Método 1: argumento directo (algunas versiones lo aceptan)
-- name: AnyDesk | set password (arg)
-  shell: bash -lc "anydesk --set-password '{{ anydesk_password }}'"
-  become: yes
-  register: ad_set1
-  no_log: true
-  changed_when: ad_set1.rc == 0
-  failed_when: false
-  when:
-    - anydesk_password is defined
-    - (anydesk_password | length) >= 8
-
-# Método 2: doble entrada por pipe (nuevo + confirm)
-- name: AnyDesk | set password (pipe doble)
-  shell: >
-    timeout 12s bash -lc
-    "printf '%s\n%s\n' '{{ anydesk_password }}' '{{ anydesk_password }}' | anydesk --set-password"
-  become: yes
-  register: ad_set2
-  no_log: true
-  changed_when: ad_set2.rc == 0
-  failed_when: false
-  when:
-    - anydesk_password is defined
-    - (anydesk_password | length) >= 8
-    - ad_set1 is defined and ad_set1.rc != 0
-
-# Método 3: expect (interactivo; cubre inglés/español)
-- name: AnyDesk | instalar pexpect (para expect)
-  apt:
-    name: python3-pexpect
-    state: present
-    update_cache: yes
-  become: yes
-  when:
-    - anydesk_password is defined
-    - (anydesk_password | length) >= 8
-    - ad_set1 is defined and ad_set1.rc != 0
-    - ad_set2 is defined and ad_set2.rc != 0
-
-- name: AnyDesk | set password (expect)
-  expect:
-    command: anydesk --set-password
-    responses:
-      '(?i)new.*(password|contraseña)': "{{ anydesk_password }}"
-      '(?i)confirm.*(password|contraseña)': "{{ anydesk_password }}"
-  become: yes
-  register: ad_set3
-  no_log: true
-  changed_when: ad_set3.rc == 0
-  failed_when: ad_set3.rc != 0
-  when:
-    - anydesk_password is defined
-    - (anydesk_password | length) >= 8
-    - ad_set1 is defined and ad_set1.rc != 0
-    - ad_set2 is defined and ad_set2.rc != 0
-
-- name: AnyDesk | reiniciar servicio (algunas versiones lo requieren)
-  shell: anydesk --restart-service || systemctl restart anydesk.service
-  become: yes
-  changed_when: false
-  failed_when: false
-
-- name: AnyDesk | estado + ID
-  shell: |
-    anydesk --get-status || true
-    anydesk --get-id || true
-  register: anydesk_info
-  changed_when: false
-  failed_when: false
-
-- name: AnyDesk | mostrar info
-  debug:
-    msg:
-      - "status/ID de {{ inventory_hostname }}:"
-      - "{{ anydesk_info.stdout_lines | default([]) }}"
