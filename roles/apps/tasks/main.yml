@@ -447,7 +447,10 @@
       - "{{ tv_journal.stdout_lines | default(['<sin logs>']) }}"
   when: tv_active.rc != 0
 
-- name: Asegurar AnyDesk activo
+# --- AnyDesk: Unattended Access con contraseña fija ---
+
+# 1) Asegura que el servicio esté arriba
+- name: AnyDesk | asegurar servicio arriba
   systemd:
     name: anydesk.service
     enabled: yes
@@ -455,29 +458,45 @@
   become: yes
   failed_when: false
 
-- name: Configurar contraseña de AnyDesk (Unattended Access)
+# 2) Espera a que systemd lo marque "active"
+- name: AnyDesk | esperar ACTIVE
+  shell: systemctl is-active anydesk.service
+  register: ad_active
+  retries: 10
+  delay: 2
+  until: ad_active.rc == 0
+  changed_when: false
+  failed_when: false
+  become: yes
+
+# 3) Setear contraseña por stdin (con newline) — NO se cuelga
+- name: AnyDesk | configurar contraseña (unattended)
   shell: |
     set -o pipefail
     printf "%s\n" "{{ anydesk_password }}" | anydesk --set-password
   args:
     executable: /bin/bash
     timeout: 20
-  no_log: true
   become: yes
   register: anydesk_setpw
-  failed_when: anydesk_setpw.rc not in [0]
+  # si devuelve 0 => OK; cualquier otro código lo marcamos como fail real
+  failed_when: anydesk_setpw.rc != 0
   changed_when: true
   when:
     - anydesk_password is defined
     - (anydesk_password | length) >= 8
+  # quita 'no_log: true' en la primera corrida si quieres ver el error, luego lo vuelves a poner
+  # no_log: true
 
-- name: Reiniciar servicio AnyDesk
+# 4) Reiniciar para que tome el cambio (algunas versiones lo requieren)
+- name: AnyDesk | reiniciar servicio
   shell: anydesk --restart-service || systemctl restart anydesk.service
   become: yes
   changed_when: false
   failed_when: false
 
-- name: Verificar estado e ID
+# 5) Comprobar estado e ID (para que lo veas en el output)
+- name: AnyDesk | estado + ID
   shell: |
     anydesk --get-status || true
     anydesk --get-id || true
@@ -485,8 +504,8 @@
   changed_when: false
   failed_when: false
 
-- name: Mostrar AnyDesk (status/ID)
+- name: AnyDesk | mostrar info
   debug:
     msg:
       - "status/ID de {{ inventory_hostname }}:"
-      - "{{ anydesk_info.stdout_lines }}"
+      - "{{ anydesk_info.stdout_lines | default([]) }}"
