@@ -320,6 +320,26 @@
       @unclutter -idle 0.5 -root
   become: yes
 
+# --- TeamViewer: autostart en LXDE (GUI para aceptar conexiones) ---
+- name: TeamViewer | detectar binario
+  shell: command -v teamviewer
+  register: tv_bin
+  changed_when: false
+  failed_when: false
+  become: yes
+
+- name: TeamViewer | añadir autostart en LXDE
+  lineinfile:
+    path: "/home/{{ kiosk_user }}/.config/lxsession/{{ lightdm_session }}/autostart"
+    insertafter: EOF
+    line: "@teamviewer --minimized"
+    create: no
+  when:
+    - manage_lightdm
+    - tv_bin.rc == 0
+  become: yes
+  notify: [reload systemd]
+
 - name: Instalar unit signage-update.service
   template:
     src: signage-update.service.j2
@@ -336,82 +356,20 @@
     state: started
   become: yes
 
-# --- TeamViewer/AnyDesk: arranque robusto y verificación ---
+# --- TeamViewer: arranque robusto y verificación (solo TeamViewer) ---
 
-- name: Recoger facts de servicios
+- name: TeamViewer | facts de servicios
   service_facts:
 
-# Incluye explícitamente anydesk.service y ambos units de TeamViewer
-- name: Construir lista final de remotos (incluye AnyDesk/TeamViewer)
-  set_fact:
-    remote_services_final: >-
-      {{ ((remote_services | default([]))
-          + ['anydesk.service', 'teamviewer.service', 'teamviewerd.service']) | unique }}
-
-# Quitar hard-mask si existe (teamviewerd)
-- name: Detectar hard-mask (teamviewerd)
-  stat:
-    path: "/etc/systemd/system/teamviewerd.service"
-  register: tvd_unit
-  become: yes
-
-- name: Eliminar hard-mask de teamviewerd
-  file:
-    path: "/etc/systemd/system/teamviewerd.service"
-    state: absent
-  when: tvd_unit.stat.islnk is defined and tvd_unit.stat.islnk and tvd_unit.stat.lnk_target == '/dev/null'
-  become: yes
-
-# Quitar hard-mask si existe (anydesk) — opcional pero recomendable
-- name: Detectar hard-mask (anydesk)
-  stat:
-    path: "/etc/systemd/system/anydesk.service"
-  register: ad_unit
-  become: yes
-
-- name: Eliminar hard-mask de anydesk
-  file:
-    path: "/etc/systemd/system/anydesk.service"
-    state: absent
-  when: ad_unit.stat.islnk is defined and ad_unit.stat.islnk and ad_unit.stat.lnk_target == '/dev/null'
-  become: yes
-
-- name: systemd daemon-reload tras quitar masks
-  systemd:
-    daemon_reload: yes
-  become: yes
-
-# Drop-ins para hacerlos resilientes (arrancar tras red y reintentar si fallan)
-- name: Crear carpeta de drop-ins para anydesk
-  file:
-    path: /etc/systemd/system/anydesk.service.d
-    state: directory
-    mode: "0755"
-  become: yes
-
-- name: Drop-in override de anydesk (Restart + After network-online)
-  copy:
-    dest: /etc/systemd/system/anydesk.service.d/override.conf
-    mode: "0644"
-    content: |
-      [Unit]
-      Wants=network-online.target
-      After=network-online.target
-
-      [Service]
-      Restart=on-failure
-      RestartSec=3s
-  notify: reload systemd
-  become: yes
-
-- name: Crear carpeta de drop-ins para teamviewerd
+# Drop-in: reintentos y arrancar después de la red
+- name: TeamViewer | crear carpeta de drop-ins
   file:
     path: /etc/systemd/system/teamviewerd.service.d
     state: directory
     mode: "0755"
   become: yes
 
-- name: Drop-in override de teamviewerd (Restart + After network-online)
+- name: TeamViewer | override (Restart + After network-online)
   copy:
     dest: /etc/systemd/system/teamviewerd.service.d/override.conf
     mode: "0644"
@@ -426,44 +384,83 @@
   notify: reload systemd
   become: yes
 
-# Unmask + enable + start para cada servicio que exista en el sistema
-- name: Asegurar remotos unmasked/enabled/started (systemd)
+# Quitar hard-mask si lo hubieran enmascarado a /dev/null
+- name: TeamViewer | detectar hard-mask
+  stat:
+    path: "/etc/systemd/system/teamviewerd.service"
+  register: tvd_unit
+  become: yes
+
+- name: TeamViewer | eliminar hard-mask
+  file:
+    path: "/etc/systemd/system/teamviewerd.service"
+    state: absent
+  when: tvd_unit.stat.islnk is defined and tvd_unit.stat.islnk and tvd_unit.stat.lnk_target == '/dev/null'
+  become: yes
+
+- name: TeamViewer | daemon-reload
   systemd:
-    name: "{{ item }}"
+    daemon_reload: yes
+  become: yes
+
+# Habilitar + arrancar por systemd y por CLI (compat)
+- name: TeamViewer | enable/start (systemd)
+  systemd:
+    name: teamviewerd.service
     masked: no
     enabled: yes
     state: started
-  loop: "{{ remote_services_final }}"
-  when: item in (ansible_facts.services | default({}))
-  register: remote_systemd
+  register: tv_systemd
   failed_when: false
   become: yes
 
-# Compatibilidad con versiones antiguas de TeamViewer (CLI)
-- name: teamviewer --daemon enable (compat)
+- name: TeamViewer | enable daemon (CLI compat)
   command: teamviewer --daemon enable
   register: tv_enable_cli
-  changed_when: "'Enabling' in tv_enable_cli.stdout or 'enable' in tv_enable_cli.stdout or tv_enable_cli.rc == 0"
+  changed_when: "'Enabling' in tv_enable_cli.stdout or tv_enable_cli.rc == 0"
   failed_when: false
   become: yes
 
-- name: teamviewer --daemon start (compat)
+- name: TeamViewer | start daemon (CLI compat)
   command: teamviewer --daemon start
   register: tv_start_cli
-  changed_when: "'Starting' in tv_start_cli.stdout or 'start' in tv_start_cli.stdout or tv_start_cli.rc == 0"
+  changed_when: "'Starting' in tv_start_cli.stdout or tv_start_cli.rc == 0"
   failed_when: false
   become: yes
 
-# Esperar a que queden realmente activos (cubre AnyDesk y TeamViewer)
-- name: Esperar a que remotos queden activos
-  shell: "systemctl is-active {{ item }}"
-  register: wait_active
+# Esperar a ACTIVE real
+- name: TeamViewer | esperar ACTIVE
+  shell: "systemctl is-active teamviewerd.service"
+  register: tv_active
   retries: 10
   delay: 2
-  until: wait_active.rc == 0
+  until: tv_active.rc == 0
   changed_when: false
   failed_when: false
-  loop: "{{ remote_services_final
-            | select('in', (ansible_facts.services | default({})).keys())
-            | list }}"
   become: yes
+
+# Diagnóstico opcional si algo falló
+- name: TeamViewer | logs si no quedó activo
+  shell: "journalctl -u teamviewerd --no-pager -n 200 || true"
+  register: tv_journal
+  when: tv_active.rc != 0
+  changed_when: false
+  failed_when: false
+  become: yes
+
+# Mostrar estado/ID para que lo veas en el output
+- name: TeamViewer | info
+  command: teamviewer info
+  register: tv_info
+  changed_when: false
+  failed_when: false
+  become: yes
+
+- name: TeamViewer | resumen
+  debug:
+    msg:
+      - "systemd enabled/started: {{ tv_systemd is defined }}"
+      - "CLI enable rc={{ tv_enable_cli.rc | default('n/a') }}, start rc={{ tv_start_cli.rc | default('n/a') }}"
+      - "is-active rc={{ tv_active.rc }}, salida={{ tv_active.stdout | default('') }}"
+      - "info:"
+      - "{{ tv_info.stdout_lines | default([]) }}"
