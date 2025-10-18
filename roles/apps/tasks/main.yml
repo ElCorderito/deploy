@@ -457,18 +457,64 @@
   become: yes
   failed_when: false
 
-- name: AnyDesk | configurar contraseña (unattended) (doble entrada)
+# --- AnyDesk: poner contraseña unattended con 3 métodos ---
+
+# Método 1: argumento directo (algunas versiones lo aceptan)
+- name: AnyDesk | set password (arg)
+  shell: bash -lc "anydesk --set-password '{{ anydesk_password }}'"
+  become: yes
+  register: ad_set1
+  no_log: true
+  changed_when: ad_set1.rc == 0
+  failed_when: false
+  when:
+    - anydesk_password is defined
+    - (anydesk_password | length) >= 8
+
+# Método 2: doble entrada por pipe (nuevo + confirm)
+- name: AnyDesk | set password (pipe doble)
   shell: >
     timeout 12s bash -lc
     "printf '%s\n%s\n' '{{ anydesk_password }}' '{{ anydesk_password }}' | anydesk --set-password"
   become: yes
-  register: anydesk_setpw
+  register: ad_set2
   no_log: true
-  changed_when: anydesk_setpw.rc == 0
-  failed_when: anydesk_setpw.rc != 0
+  changed_when: ad_set2.rc == 0
+  failed_when: false
   when:
     - anydesk_password is defined
     - (anydesk_password | length) >= 8
+    - ad_set1 is defined and ad_set1.rc != 0
+
+# Método 3: expect (interactivo; cubre inglés/español)
+- name: AnyDesk | instalar pexpect (para expect)
+  apt:
+    name: python3-pexpect
+    state: present
+    update_cache: yes
+  become: yes
+  when:
+    - anydesk_password is defined
+    - (anydesk_password | length) >= 8
+    - ad_set1 is defined and ad_set1.rc != 0
+    - ad_set2 is defined and ad_set2.rc != 0
+
+- name: AnyDesk | set password (expect)
+  expect:
+    command: anydesk --set-password
+    responses:
+      '(?i)new.*(password|contraseña)': "{{ anydesk_password }}"
+      '(?i)confirm.*(password|contraseña)': "{{ anydesk_password }}"
+  become: yes
+  register: ad_set3
+  no_log: true
+  changed_when: ad_set3.rc == 0
+  failed_when: ad_set3.rc != 0
+  when:
+    - anydesk_password is defined
+    - (anydesk_password | length) >= 8
+    - ad_set1 is defined and ad_set1.rc != 0
+    - ad_set2 is defined and ad_set2.rc != 0
 
 - name: AnyDesk | reiniciar servicio (algunas versiones lo requieren)
   shell: anydesk --restart-service || systemctl restart anydesk.service
