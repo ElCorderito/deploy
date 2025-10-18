@@ -457,7 +457,7 @@
   become: yes
   failed_when: false
 
-- name: AnyDesk | configurar contraseña (unattended) con stdin+newline
+- name: AnyDesk | configurar contraseña (unattended)
   command: anydesk --set-password
   args:
     stdin: "{{ anydesk_password }}"
@@ -467,9 +467,6 @@
   no_log: true
   changed_when: anydesk_setpw.rc == 0
   failed_when: anydesk_setpw.rc != 0
-  when:
-    - anydesk_password is defined
-    - (anydesk_password | length) >= 8
 
 - name: AnyDesk | reiniciar servicio (algunas versiones lo requieren)
   shell: anydesk --restart-service || systemctl restart anydesk.service
