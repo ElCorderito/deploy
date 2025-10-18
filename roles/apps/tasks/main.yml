@@ -72,7 +72,7 @@
 
 - name: Copiar llave signage
   copy:
-    src: "{{ playbook_dir }}/secrets/id_ed25519_signage"
+    src: "{{ playbook_dir }}/secrets/id_ed25519_signage }}"
     dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519_signage"
     mode: "0600"
     owner: "{{ kiosk_user }}"
@@ -103,7 +103,6 @@
         IdentityFile ~/.ssh/id_ed25519_electron
         IdentitiesOnly yes
         StrictHostKeyChecking accept-new
-
       # Usa este alias solo si el remoto de signage es git@github-signage:...
       Host github-signage
         HostName github.com
@@ -161,7 +160,8 @@
 # ---------- Python venv + requirements ----------
 - name: Crear venv (si no existe)
   command: "{{ python_bin }} -m venv {{ venv_dir }}"
-  args: { creates: "{{ venv_dir }}/bin/activate" }
+  args:
+    creates: "{{ venv_dir }}/bin/activate"
   become: yes
   become_user: "{{ kiosk_user }}"
 
@@ -283,10 +283,10 @@
     no_extra_spaces: true
     backup: yes
   loop:
-    - { option: "autologin-user",   value: "{{ lightdm_autologin_user }}" }
+    - { option: "autologin-user", value: "{{ lightdm_autologin_user }}" }
     - { option: "autologin-session", value: "{{ lightdm_session }}" }
-    - { option: "user-session",      value: "{{ lightdm_session }}" }
-    - { option: "xserver-command",   value: "X" }
+    - { option: "user-session", value: "{{ lightdm_session }}" }
+    - { option: "xserver-command", value: "X" }
   when: manage_lightdm
   become: yes
 
@@ -307,163 +307,72 @@
     mode: "0755"
   become: yes
 
-- name: Autostart LXDE (panel, fondo y sin DPMS)
+- name: Autostart LXDE sin DPMS
   copy:
     dest: "/home/{{ kiosk_user }}/.config/lxsession/{{ lightdm_session }}/autostart"
     owner: "{{ kiosk_user }}"
     group: "{{ kiosk_user }}"
     mode: "0644"
     content: |
-      @lxpanel --profile {{ lightdm_session }}
-      @pcmanfm --desktop --profile {{ lightdm_session }}
       @xset s off
       @xset -dpms
       @xset s noblank
       @unclutter -idle 0.5 -root
   become: yes
 
-- name: Eliminar perfil LXDE-pi-x inválido (si existe)
-  file:
-    path: "/home/{{ kiosk_user }}/.config/lxsession/LXDE-pi-x"
-    state: absent
-  become: yes
+- name: Instalar unit signage-update.service
+  template:
+    src: signage-update.service.j2
+    dest: /etc/systemd/system/signage-update.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload systemd
 
-# --- TeamViewer: autostart GUI robusto (LXDE + XDG) ---
-- name: TeamViewer | detectar binario
-  shell: command -v teamviewer
-  register: tv_bin
-  changed_when: false
-  failed_when: false
-  become: yes
+- name: Asegurar timer habilitado
+  systemd:
+    name: signage-update.timer
+    enabled: yes
+    state: started
 
-# NEW: instala TeamViewer si NO está el binario (por defecto 'teamviewer-host')
-- name: TeamViewer | instalar si falta (host por defecto)
-  apt:
-    name: "{{ teamviewer_pkg | default('teamviewer-host') }}"
-    state: present
-    update_cache: yes
-  when: tv_bin.rc != 0
-  become: yes
-  failed_when: false
-
-- name: TeamViewer | dependencias minizip (si faltan)
-  apt:
-    name: "{{ item }}"
-    state: present
-    update_cache: yes     # <-- agregar
-  loop:
-    - libminizip1
-    - libminizip1t64
-  ignore_errors: yes
-  when: tv_bin.rc != 0
-  become: yes
-
-# NEW: re-detectar el binario tras instalar
-- name: TeamViewer | re-detectar binario
-  shell: command -v teamviewer
-  register: tv_bin
-  changed_when: false
-  failed_when: false
-  become: yes
-
-- name: TeamViewer | facts de servicios
+# --- TeamViewer/AnyDesk: endurecer arranque y diagnóstico ---
+- name: Recoger facts de servicios
   service_facts:
 
-- name: TeamViewer | definir sesiones LXDE a cubrir
+# 1) Normaliza lista de remotos (cubre teamviewer y teamviewerd)
+- name: Construir lista final de remotos
   set_fact:
-    lxde_sessions_all: "{{ ([lightdm_session] if manage_lightdm else []) + ['LXDE-pi', 'LXDE'] | unique }}"
+    remote_services_final: >-
+      {{ (remote_services | default([])) + ['teamviewer.service', 'teamviewerd.service'] | unique }}
 
-- name: TeamViewer | preparar carpetas de autostart LXDE
-  file:
-    path: "/home/{{ kiosk_user }}/.config/lxsession/{{ item }}"
-    state: directory
-    owner: "{{ kiosk_user }}"
-    group: "{{ kiosk_user }}"
-    mode: "0755"
-  loop: "{{ lxde_sessions_all }}"
-  when: tv_bin.rc == 0
-  become: yes
-
-- name: TeamViewer | añadir línea de autostart en LXDE
-  lineinfile:
-    path: "/home/{{ kiosk_user }}/.config/lxsession/{{ item }}/autostart"
-    insertafter: EOF
-    line: "@teamviewer --minimized"
-    create: yes
-    owner: "{{ kiosk_user }}"
-    group: "{{ kiosk_user }}"
-    mode: "0644"
-  loop: "{{ lxde_sessions_all }}"
-  when: tv_bin.rc == 0
-  become: yes
-
-- name: TeamViewer | carpeta XDG autostart
-  file:
-    path: "/home/{{ kiosk_user }}/.config/autostart"
-    state: directory
-    owner: "{{ kiosk_user }}"
-    group: "{{ kiosk_user }}"
-    mode: "0755"
-  when: tv_bin.rc == 0
-  become: yes
-
-- name: TeamViewer | .desktop XDG
-  copy:
-    dest: "/home/{{ kiosk_user }}/.config/autostart/teamviewer.desktop"
-    owner: "{{ kiosk_user }}"
-    group: "{{ kiosk_user }}"
-    mode: "0644"
-    content: |
-      [Desktop Entry]
-      Type=Application
-      Name=TeamViewer
-      Exec=teamviewer --minimized
-      X-GNOME-Autostart-enabled=true
-      X-LXDE-Session=true
-  when: tv_bin.rc == 0
-  become: yes
-
-- name: TeamViewer | marcar si el service existe
-  set_fact:
-    tv_service_present: "{{ 'teamviewerd.service' in (ansible_facts.services | default({})) }}"
-
-# Si no existe el unit, muestra pista (no rompe el play)
-- name: TeamViewer | aviso si no hay service (¿instalado?)
-  debug:
-    msg:
-      - "No se encontró teamviewerd.service en systemd."
-      - "Si TeamViewer no está instalado, instala 'teamviewer' o 'teamviewer-host'."
-  when: not tv_service_present
-
-# Quitar hard-mask si existiera
-- name: TeamViewer | detectar hard-mask
+# 2) Quitar hard-mask si existe (symlink -> /dev/null)
+- name: Detectar hard-mask (symlink a /dev/null)
   stat:
     path: "/etc/systemd/system/teamviewerd.service"
   register: tvd_unit
-  when: tv_service_present
   become: yes
 
-- name: TeamViewer | eliminar hard-mask
+- name: Eliminar hard-mask de teamviewerd
   file:
     path: "/etc/systemd/system/teamviewerd.service"
     state: absent
-  when:
-    - tv_service_present
-    - tvd_unit.stat.islnk is defined
-    - tvd_unit.stat.islnk
-    - tvd_unit.stat.lnk_target == '/dev/null'
+  when: tvd_unit.stat.islnk is defined and tvd_unit.stat.islnk and tvd_unit.stat.lnk_target == '/dev/null'
   become: yes
 
-# Drop-in: arrancar tras red y reintentar si cae
-- name: TeamViewer | crear carpeta de drop-ins
+- name: systemd daemon-reload tras quitar hard-mask
+  systemd:
+    daemon_reload: yes
+  become: yes
+
+# 3) Drop-in para hacer el servicio más resiliente (restart + network-online)
+- name: Crear carpeta de drop-ins para teamviewerd
   file:
     path: /etc/systemd/system/teamviewerd.service.d
     state: directory
     mode: "0755"
-  when: tv_service_present
   become: yes
 
-- name: TeamViewer | override (Restart + After network-online)
+- name: Drop-in override de teamviewerd (Restart + After network-online)
   copy:
     dest: /etc/systemd/system/teamviewerd.service.d/override.conf
     mode: "0644"
@@ -471,99 +380,66 @@
       [Unit]
       Wants=network-online.target
       After=network-online.target
-
       [Service]
       Restart=on-failure
       RestartSec=3s
-  when: tv_service_present
   notify: reload systemd
   become: yes
 
-- name: TeamViewer | daemon-reload
+# 4) Unmask + enable + start vía systemd para cada servicio que exista
+- name: Asegurar remotos unmasked/enabled/started (systemd)
   systemd:
-    daemon_reload: yes
-  when: tv_service_present
-  become: yes
-
-- name: TeamViewer | unmask + reset-failed
-  shell: |
-    systemctl unmask teamviewerd.service || true
-    systemctl reset-failed teamviewerd.service || true
-  when: tv_service_present
-  become: yes
-
-# Enable+start por systemd
-- name: TeamViewer | enable/start (systemd)
-  systemd:
-    name: teamviewerd.service
+    name: "{{ item }}"
     masked: no
     enabled: yes
     state: started
+  loop: "{{ remote_services_final }}"
+  when: item in (ansible_facts.services | default({}))
   register: tv_systemd
   failed_when: false
-  when: tv_service_present
   become: yes
 
-# Compat CLI (sirve en varias versiones)
-- name: TeamViewer | enable daemon (CLI compat)
+# 5) Arranque vía CLI por compatibilidad con versiones antiguas (no falla si no existe)
+- name: teamviewer --daemon enable (compat)
   command: teamviewer --daemon enable
   register: tv_enable_cli
-  changed_when: "'Enabling' in tv_enable_cli.stdout or tv_enable_cli.rc == 0"
+  changed_when: "'Enabling' in tv_enable_cli.stdout or 'enable' in tv_enable_cli.stdout or tv_enable_cli.rc == 0"
   failed_when: false
-  when: tv_bin.rc == 0
   become: yes
 
-- name: TeamViewer | start daemon (CLI compat)
+- name: teamviewer --daemon start (compat)
   command: teamviewer --daemon start
   register: tv_start_cli
-  changed_when: "'Starting' in tv_start_cli.stdout or tv_start_cli.rc == 0"
+  changed_when: "'Starting' in tv_start_cli.stdout or 'start' in tv_start_cli.stdout or tv_start_cli.rc == 0"
   failed_when: false
-  when: tv_bin.rc == 0
   become: yes
 
-# Espera activa (si hay unit)
-- name: TeamViewer | esperar ACTIVE
-  shell: "systemctl is-active teamviewerd.service"
+# 6) Esperar a que realmente quede activo
+- name: Esperar a que teamviewerd quede activo
+  shell: "systemctl is-active teamviewerd.service || systemctl is-active teamviewer.service"
   register: tv_active
-  retries: 10
+  retries: 8
   delay: 2
-  until: tv_active.rc == 0
+  until: tv_active.stdout is search('active')
   changed_when: false
   failed_when: false
-  when: tv_service_present
   become: yes
 
-# Si NO quedó activo, volcar status y journal (diagnóstico en output)
-- name: TeamViewer | volcado de estado y logs si falla
-  shell: |
-    set -o pipefail
-    systemctl status teamviewerd.service --no-pager -l || true
-    echo '--- Últimas 120 líneas de journal ---'
-    journalctl -u teamviewerd.service -n 120 --no-pager || true
-  register: tv_diag
+# 7) Si sigue sin levantar, traer logs para diagnóstico en el output del play
+- name: Traer logs de teamviewerd si no está activo
+  shell: "journalctl -u teamviewerd --no-pager -n 200 || true"
+  register: tv_journal
+  when: tv_active.stdout is not search('active')
   changed_when: false
   failed_when: false
-  when:
-    - tv_service_present
-    - tv_active is defined
-    - tv_active.rc != 0
   become: yes
 
-- name: TeamViewer | info (si hay binario)
-  command: teamviewer info
-  register: tv_info
-  changed_when: false
-  failed_when: false
-  when: tv_bin.rc == 0
-  become: yes
-
-- name: TeamViewer | resumen
+- name: Mostrar resumen de estado y logs si hubo problema
   debug:
     msg:
-      - "systemd enable/start intentado: {{ tv_service_present }}"
-      - "CLI enable rc={{ tv_enable_cli.rc | default('n/a') }}, start rc={{ tv_start_cli.rc | default('n/a') }}"
-      - "is-active rc={{ tv_active.rc | default('n/a') }}, salida={{ tv_active.stdout | default('') }}"
-      - "teamviewer info:"
-      - "{{ tv_info.stdout_lines | default([]) }}"
-      - "diagnóstico (si falló):"
-      - "{{ tv_diag.stdout_lines | default([]) }}"
+      - "systemd result: {{ tv_systemd.results | map(attribute='name') | list }}"
+      - "CLI enable rc={{ tv_enable_cli.rc }} start rc={{ tv_start_cli.rc }}"
+      - "is-active: {{ tv_active.stdout | default('n/a') }}"
+      - "journal (ultimas lineas):"
+      - "{{ tv_journal.stdout_lines | default(['<sin logs>']) }}"
+  when: tv_active.stdout is not search('active')
