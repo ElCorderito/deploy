@@ -457,16 +457,18 @@
   become: yes
   failed_when: false
 
-- name: AnyDesk | configurar contraseña (unattended)
-  command: anydesk --set-password
-  args:
-    stdin: "{{ anydesk_password }}"
-    stdin_add_newline: yes
+- name: AnyDesk | configurar contraseña (unattended) (doble entrada)
+  shell: >
+    timeout 12s bash -lc
+    "printf '%s\n%s\n' '{{ anydesk_password }}' '{{ anydesk_password }}' | anydesk --set-password"
   become: yes
   register: anydesk_setpw
   no_log: true
   changed_when: anydesk_setpw.rc == 0
   failed_when: anydesk_setpw.rc != 0
+  when:
+    - anydesk_password is defined
+    - (anydesk_password | length) >= 8
 
 - name: AnyDesk | reiniciar servicio (algunas versiones lo requieren)
   shell: anydesk --restart-service || systemctl restart anydesk.service
