@@ -445,10 +445,9 @@
       - "is-active: {{ tv_active.stdout | default('n/a') }}"
       - "journal (ultimas lineas):"
       - "{{ tv_journal.stdout_lines | default(['<sin logs>']) }}"
-  when: tv_active.stdout is not search('active')
+  when: tv_active.rc != 0
 
-# Asegurar AnyDesk activo (idempotente)
-- name: Habilitar y arrancar AnyDesk
+- name: Asegurar AnyDesk activo
   systemd:
     name: anydesk.service
     enabled: yes
@@ -456,21 +455,38 @@
   become: yes
   failed_when: false
 
-# Establecer contraseña de Unattended Access con stdin (no se loguea)
 - name: Configurar contraseña de AnyDesk (Unattended Access)
-  shell: anydesk --set-password
+  shell: |
+    set -o pipefail
+    printf "%s\n" "{{ anydesk_password }}" | anydesk --set-password
   args:
-    stdin: "{{ anydesk_password }}"
+    executable: /bin/bash
+    timeout: 20
   no_log: true
   become: yes
+  register: anydesk_setpw
+  failed_when: anydesk_setpw.rc not in [0]
+  changed_when: true
+  when:
+    - anydesk_password is defined
+    - (anydesk_password | length) >= 8
 
-# Obtener el ID de AnyDesk para que lo veas al final del play
-- name: Leer AnyDesk ID
-  command: anydesk --get-id
-  register: anydesk_id_cmd
+- name: Reiniciar servicio AnyDesk
+  shell: anydesk --restart-service || systemctl restart anydesk.service
+  become: yes
   changed_when: false
   failed_when: false
 
-- name: Mostrar AnyDesk ID
+- name: Verificar estado e ID
+  shell: |
+    anydesk --get-status || true
+    anydesk --get-id || true
+  register: anydesk_info
+  changed_when: false
+  failed_when: false
+
+- name: Mostrar AnyDesk (status/ID)
   debug:
-    msg: "AnyDesk ID de {{ inventory_hostname }}: {{ anydesk_id_cmd.stdout | default('desconocido') }}"
+    msg:
+      - "status/ID de {{ inventory_hostname }}:"
+      - "{{ anydesk_info.stdout_lines }}"
