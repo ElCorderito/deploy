@@ -327,13 +327,14 @@
     owner: root
     group: root
     mode: '0644'
-  notify: Reload systemd
+  notify: [reload systemd]
 
 - name: Asegurar timer habilitado
   systemd:
     name: signage-update.timer
     enabled: yes
     state: started
+  become: yes
 
 # --- TeamViewer/AnyDesk: endurecer arranque y diagnóstico ---
 
@@ -344,8 +345,8 @@
 - name: Construir lista final de remotos
   set_fact:
     remote_services_final: >-
-      {{ (remote_services | default([])) 
-         + ['teamviewer.service', 'teamviewerd.service'] | unique }}
+      {{ ((remote_services | default([]))
+          + ['teamviewer.service', 'teamviewerd.service']) | unique }}
 
 # 2) Quitar hard-mask si existe (symlink -> /dev/null)
 - name: Detectar hard-mask (symlink a /dev/null)
@@ -423,16 +424,15 @@
   register: tv_active
   retries: 8
   delay: 2
-  until: tv_active.stdout is search('active')
+  until: tv_active.rc == 0
   changed_when: false
   failed_when: false
   become: yes
 
-# 7) Si sigue sin levantar, traer logs para diagnóstico en el output del play
 - name: Traer logs de teamviewerd si no está activo
   shell: "journalctl -u teamviewerd --no-pager -n 200 || true"
   register: tv_journal
-  when: tv_active.stdout is not search('active')
+  when: tv_active.rc != 0
   changed_when: false
   failed_when: false
   become: yes
@@ -446,3 +446,31 @@
       - "journal (ultimas lineas):"
       - "{{ tv_journal.stdout_lines | default(['<sin logs>']) }}"
   when: tv_active.stdout is not search('active')
+
+# Asegurar AnyDesk activo (idempotente)
+- name: Habilitar y arrancar AnyDesk
+  systemd:
+    name: anydesk.service
+    enabled: yes
+    state: started
+  become: yes
+  failed_when: false
+
+# Establecer contraseña de Unattended Access con stdin (no se loguea)
+- name: Configurar contraseña de AnyDesk (Unattended Access)
+  shell: anydesk --set-password
+  args:
+    stdin: "{{ anydesk_password }}"
+  no_log: true
+  become: yes
+
+# Obtener el ID de AnyDesk para que lo veas al final del play
+- name: Leer AnyDesk ID
+  command: anydesk --get-id
+  register: anydesk_id_cmd
+  changed_when: false
+  failed_when: false
+
+- name: Mostrar AnyDesk ID
+  debug:
+    msg: "AnyDesk ID de {{ inventory_hostname }}: {{ anydesk_id_cmd.stdout | default('desconocido') }}"
