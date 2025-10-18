@@ -72,7 +72,7 @@
 
 - name: Copiar llave signage
   copy:
-    src: "{{ playbook_dir }}/secrets/id_ed25519_signage }}"
+    src: "{{ playbook_dir }}/secrets/id_ed25519_signage"
     dest: "/home/{{ kiosk_user }}/.ssh/id_ed25519_signage"
     mode: "0600"
     owner: "{{ kiosk_user }}"
