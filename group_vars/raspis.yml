@@ -24,6 +24,9 @@ electron_update_every: "2min"
 signage_update_every:  "10min"
 maintenance_hour:      "03:00:00"
 
+# --- Mantenimiento APT
+apt_every_days: 30
+
 # --- Optimización CPU del service de Electron (se aplica si hay >=4 vCPUs)
 cpuset_default: "2 3"
 

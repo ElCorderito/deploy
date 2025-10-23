@@ -3,5 +3,6 @@ Description=Raspberry Pi daily maintenance
 
 [Service]
 Type=oneshot
+Environment="APT_EVERY_DAYS={{ apt_every_days | default(30) }}"
 ExecStart=/usr/local/bin/rpi_maintenance.sh
 SuccessExitStatus=0
