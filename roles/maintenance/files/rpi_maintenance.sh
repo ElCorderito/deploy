@@ -30,12 +30,19 @@ if (( do_apt == 1 )); then
   apt autoremove -y
   apt clean
   touch "$STAMP"
+
+  # ← REINICIO SOLO CUANDO SÍ HUBO MANTENIMIENTO
+  #    (o sea ~1 vez cada 30 días) Y SOLO si el sistema lo pide.
+  if [[ -f /var/run/reboot-required ]]; then
+    echo "[rpi-maintenance] reboot-required detectado. Reiniciando..."
+    systemctl reboot
+  fi
 else
   echo "[rpi-maintenance] APT omitido (última < ${DAYS}d)."
 fi
 
-# ===== Tareas diarias (sí conviene diario a las 3am) =====
-# Mantén 2 días (cámbialo si quieres)
+# ===== Tareas diarias (estas sí corren todos los días a las 3am) =====
+# Mantén 2 días de logs (puedes subirlo a 7d si quieres más historial)
 journalctl --vacuum-time=2d
 
 # Limpieza temporal y logs
@@ -44,6 +51,3 @@ rm -rf /tmp/* /var/tmp/*
 for f in /var/log/*.log; do
   [[ -f "$f" ]] && truncate -s 0 "$f" || true
 done
-
-# Opcional: reiniciar si el sistema lo requiere
-# if [[ -f /var/run/reboot-required ]]; then systemctl reboot; fi
