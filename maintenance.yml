@@ -1,0 +1,7 @@
+# maintenance.yml
+- name: Solo actualizar mantenimiento / reset de RPi
+  hosts: raspis
+  become: yes
+
+  roles:
+    - maintenance

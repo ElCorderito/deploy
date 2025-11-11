@@ -196,6 +196,11 @@ y asegúrate de tener `avahi-daemon` en la Pi y `libnss-mdns` en la máquina de 
    ansible-playbook -i inventory.ini site.yml -l rasp_otay --ask-vault-pass -K
    ```
 
+   ```bash
+   ansible-playbook -i inventory.ini maintenance.yml \
+   -l rasp_cuatro \
+   --ask-vault-pass -K
+   ```
 ---
 
 ## 10) Troubleshooting express
