@@ -13,7 +13,7 @@ signage_repo: "git@github-signage:ElCorderito/signage.git"
 kiosk_user: "{{ ansible_user }}"
 
 # --- Python / Electron
-python_bin:  /usr/bin/python3.11
+python_bin:  /usr/bin/python3
 venv_dir: /opt/electron_rasp/electron_rasp/.venv
 flask_app_dir: "{{ electron_root }}/electron_rasp/flask_app"
 requirements_file: "{{ electron_root }}/electron_rasp/requirements.txt"
@@ -35,8 +35,8 @@ anydesk_password: "Emoliano13"
 # --- Paquetes base para kiosk/X y utilidades
 apt_base_packages:
   - git
-  - python3.11
-  - python3.11-venv
+  - python3
+  - python3-venv
   - python3-pip
   - nodejs
   - npm
