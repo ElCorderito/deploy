@@ -1,0 +1,3 @@
+SCREEN_ID: rasp_toreador
+BRANCH_ID: 8
+KIOSK_URL: "http://localhost:3000"
