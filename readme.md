@@ -50,10 +50,8 @@ sudo apt install -y git ansible python3-venv python3-pip nodejs npm
 ```bash
 cd ~
 git clone https://github.com/ElCorderito/deploy.git
-cd deploy
 ```
 
-> Si prefieres SSH: `git clone git@github.com:ElCorderito/deploy.git`
 
 ---
 
@@ -210,4 +208,24 @@ y asegúrate de tener `avahi-daemon` en la Pi y `libnss-mdns` en la máquina de 
 * **No arranca el kiosko al login** → verifica `lightdm.service` y `autologin-user` en `/etc/lightdm/lightdm.conf`.
 * **signage no se actualiza** → mira `systemctl status signage-update.timer` y el log del service `signage-update`.
 
+## 11) Malo de audio
+
+Para ver si es OS:
+   ```bash
+   pw-play /usr/share/sounds/alsa/Front_Center.wav
+   aplay /usr/share/sounds/alsa/Front_Center.wav
+   ```
+
+Para ver si es Electron Cttl + Shift + I:
+   ```bash
+   Howler?.ctx?.state
+   ```
+
+Inmediato:
+   ```bash
+   Howler.ctx.resume()
+   beeps[1].play()
+   ```
+
+Checar chatgpt chat "Problema HDMI Raspberry Pi" esta fijado
 ---
