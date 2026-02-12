@@ -210,22 +210,34 @@ y asegúrate de tener `avahi-daemon` en la Pi y `libnss-mdns` en la máquina de 
 
 ## 11) Malo de audio
 
-Para ver si es OS:
+Checar con "id -u" que numero te lanz y ponerlo en este archivo:
    ```bash
-   pw-play /usr/share/sounds/alsa/Front_Center.wav
-   aplay /usr/share/sounds/alsa/Front_Center.wav
+   sudo nano /etc/systemd/system/electron_rasp-electron.service
    ```
 
-Para ver si es Electron Cttl + Shift + I:
+Y poner esto abajo de las otras Environment:
    ```bash
-   Howler?.ctx?.state
+   # ---- Audio: forzar PipeWire/Pulse (evita ALSA directo) ----
+   Environment=XDG_RUNTIME_DIR=/run/user/1000
+   Environment=PULSE_SERVER=unix:/run/user/1000/pulse/native
+   Environment=PIPEWIRE_LATENCY=128/48000
    ```
 
-Inmediato:
+Edita el override de Electron (flags)
    ```bash
-   Howler.ctx.resume()
-   beeps[1].play()
+   sudo nano /etc/systemd/system/electron_rasp-electron.service.d/override.conf
    ```
 
-Checar chatgpt chat "Problema HDMI Raspberry Pi" esta fijado
+Y hasta abajo se debe de ver asi:
+   ```bash
+   --autoplay-policy=no-user-gesture-required \
+   --disable-features=AudioServiceOutOfProcess"
+   ```
+
+Y recargar:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl restart electron_rasp-flask.service
+   sudo systemctl restart electron_rasp-electron.service
+   ```
 ---
