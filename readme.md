@@ -123,92 +123,7 @@ Corre el playbook (pedirá sudo y, si cifraste, la clave de Vault):
 ansible-playbook -i inventory.ini site.yml -l rasp_trolley --ask-vault-pass -K
 ```
 
-Qué hará:
-
-* Instala paquetes base
-* Copia deploy keys al usuario
-* Clona/actualiza `electron_rasp` y `signage` (ramas definidas)
-* Crea venv + `pip install -r`
-* `npm ci` en `electron/`
-* Copia `update_repo.sh` y `signage/update.sh`
-* Instala services/timers (`electron_rasp-*`, `signage-*`, `rpi-maintenance.timer`)
-* Configura LightDM autologin (si está activado en vars)
-* Habilita AnyDesk/TeamViewer si existen
-
----
-
-## 7) Verificación rápida
-
-```bash
-systemctl status electron_rasp-flask.service
-systemctl status electron_rasp-electron.service
-systemctl list-timers | grep -E 'electron_rasp|signage|rpi-maintenance'
-journalctl -u electron_rasp-electron -f
-journalctl -u electron_rasp-flask -f
-```
-
-Si todo ok, reinicia para probar arranque limpio:
-
-```bash
-sudo reboot
-```
-
----
-
-## 8) ¿Y si la IP cambia?
-
-Como corres Ansible en la misma Pi, usas `127.0.0.1` y te olvidas.
-Si algún día corres Ansible desde otra máquina, usa:
-
-```ini
-[raspis]
-rasp_trolley ansible_host=rasp_trolley.local ansible_user=pi
-```
-
-y asegúrate de tener `avahi-daemon` en la Pi y `libnss-mdns` en la máquina de control.
-
----
-
-## 9) Añadir otra Raspberry (ej. `rasp_otay`) en 1 minuto
-
-1. En `inventory.ini`, agrega:
-
-   ```ini
-   rasp_otay ansible_host=IP.O.TU.RASP ansible_user=pi
-   ```
-
-   (o `127.0.0.1` + `ansible_connection=local` si corres ahí mismo).
-
-2. Crea `host_vars/rasp_otay.yml`:
-
-   ```yaml
-   SCREEN_ID: rasp_otay
-   BRANCH_ID: 5   # lo que toque
-   KIOSK_URL: "http://localhost:3000"
-   ```
-
-3. Corre:
-
-   ```bash
-   ansible -i inventory.ini rasp_otay -m ping
-   ansible-playbook -i inventory.ini site.yml -l rasp_otay --ask-vault-pass -K
-   ```
-
-   ```bash
-   ansible-playbook -i inventory.ini maintenance.yml \
-   -l rasp_cuatro \
-   --ask-vault-pass -K
-   ```
----
-
-## 10) Troubleshooting express
-
-* **`Permission denied (publickey)` al clonar** → deploy keys mal cargadas o mal `key_file:`. Revisa que las **.pub** estén en GitHub (Deploy keys) y que Ansible copió las privadas a `~/.ssh` del `kiosk_user`.
-* **`pathspec 'main' did not match`** → cambia `electron_branch`/`signage_branch` a la rama real (`master`/`main`).
-* **No arranca el kiosko al login** → verifica `lightdm.service` y `autologin-user` en `/etc/lightdm/lightdm.conf`.
-* **signage no se actualiza** → mira `systemctl status signage-update.timer` y el log del service `signage-update`.
-
-## 11) Malo de audio
+## 7) Malo de audio
 
 Checar con "id -u" que numero te lanz y ponerlo en este archivo:
    ```bash
@@ -240,4 +155,190 @@ Y recargar:
    sudo systemctl restart electron_rasp-flask.service
    sudo systemctl restart electron_rasp-electron.service
    ```
+
+## 8) Dejar ip statica
+
+
+# PASO 1 — Ver qué conexión está usando
+
+Primero identifica la conexión activa:
+
+```bash
+nmcli connection show --active
+```
+
+Te debe salir algo como:
+
+```
+NAME                UUID                                  DEVICE
+Wired connection 1  xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx  eth0
+```
+
+Qué cambia aquí:
+
+* El **UUID** será diferente en cada Raspberry.
+* El nombre puede ser distinto ("Wired connection 1", "ethernet", etc.).
+
+Guarda:
+
+* El **UUID**
+* O el **NAME exacto**
+
+---
+
+# PASO 2 — Ver tu red actual (esto cambia según lugar)
+
+Necesitas saber:
+
+```bash
+ip a
+ip route
+```
+
+De aquí sacas:
+
+* Tu red (ej: 192.168.1.X o 192.168.7.X)
+* Tu gateway (ej: 192.168.1.1)
+
+Ejemplo típico:
+
+Si ves:
+
+```
+inet 192.168.1.23/24
+default via 192.168.1.1
+```
+
+Entonces:
+
+* Red → 192.168.1.X
+* Gateway → 192.168.1.1
+* Máscara → /24
+
+---
+
+# PASO 3 — Elegir la IP estática correcta
+
+Debe cumplir:
+
+✔ Mismo rango que tu red
+✔ No repetida
+✔ Fuera del DHCP del router
+
+Ejemplo seguro:
+
+Si tu red es:
+
+```
+192.168.1.X
+```
+
+Puedes usar:
+
+```
+192.168.1.50
+```
+
+---
+
+# PASO 4 — Forzar estática correctamente (FORMA LIMPIA)
+
+Usando el UUID (recomendado):
+
+```bash
+sudo nmcli connection modify TU_UUID \
+ipv4.method manual \
+ipv4.addresses 192.168.1.50/24 \
+ipv4.gateway 192.168.1.1 \
+ipv4.dns "8.8.8.8 1.1.1.1" \
+ipv4.ignore-auto-routes yes \
+ipv4.ignore-auto-dns yes
+```
+
+⚠️ Cambia:
+
+* `TU_UUID`
+* `192.168.1.50`
+* `192.168.1.1`
+
+---
+
+# PASO 5 — Reiniciar NetworkManager (IMPORTANTE)
+
+En Bookworm esto es clave:
+
+```bash
+sudo systemctl restart NetworkManager
+```
+
+Espera 5–10 segundos.
+
+---
+
+# PASO 6 — Verificar
+
+```bash
+ip a
+```
+
+Debe decir:
+
+```
+inet 192.168.1.50/24
+```
+
+Luego:
+
+```bash
+ip route
+```
+
+Debe decir:
+
+```
+default via 192.168.1.1
+```
+
+---
+
+# SI NO CAMBIA (SOLUCIÓN DEFINITIVA)
+
+Borrar conexión DHCP y crear nueva limpia:
+
+```bash
+sudo nmcli connection delete "Wired connection 1"
+```
+
+Luego crear estática nueva:
+
+```bash
+sudo nmcli connection add type ethernet ifname eth0 \
+con-name static-eth0 \
+ipv4.method manual \
+ipv4.addresses 192.168.1.50/24 \
+ipv4.gateway 192.168.1.1 \
+ipv4.dns "8.8.8.8 1.1.1.1"
+```
+
+Activarla:
+
+```bash
+sudo nmcli connection up static-eth0
+```
+
+Eso elimina cualquier resto de DHCP.
+
+---
+
+# Lo que cambia dependiendo de cada Raspberry
+
+Cambia esto en cada una:
+
+| Elemento          | Cambia según   |
+| ----------------- | -------------- |
+| UUID              | Cada Raspberry |
+| Nombre conexión   | Puede variar   |
+| Red (192.168.X.X) | Según router   |
+| Gateway           | Según router   |
+| IP fija elegida   | Debe ser única |
 ---
