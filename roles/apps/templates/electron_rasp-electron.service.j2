@@ -16,6 +16,10 @@ Environment="BRANCH_ID={{ BRANCH_ID }}"
 Environment="KIOSK_URL=http://127.0.0.1:5000"
 Environment="SPAWN_FLASK=0"
 
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=PULSE_SERVER=unix:/run/user/1000/pulse/native
+Environment=PIPEWIRE_LATENCY=128/48000
+
 # dar 2s para que el display esté 100% listo
 ExecStartPre=/bin/sleep 2
 ExecStart=/usr/bin/npm run electron
