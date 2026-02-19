@@ -176,7 +176,6 @@ Wired connection 1  xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx  eth0
 
 Qué cambia aquí:
 
-* El **UUID** será diferente en cada Raspberry.
 * El nombre puede ser distinto ("Wired connection 1", "ethernet", etc.).
 
 Guarda:
@@ -186,7 +185,7 @@ Guarda:
 
 ---
 
-# PASO 2 — Ver tu red actual (esto cambia según lugar)
+# PASO 2 — Ver tu red actual
 
 Necesitas saber:
 
@@ -217,33 +216,9 @@ Entonces:
 
 ---
 
-# PASO 3 — Elegir la IP estática correcta
+# PASO 3 — Forzar estática correctamente
 
-Debe cumplir:
-
-✔ Mismo rango que tu red
-✔ No repetida
-✔ Fuera del DHCP del router
-
-Ejemplo seguro:
-
-Si tu red es:
-
-```
-192.168.1.X
-```
-
-Puedes usar:
-
-```
-192.168.1.50
-```
-
----
-
-# PASO 4 — Forzar estática correctamente (FORMA LIMPIA)
-
-Usando el UUID (recomendado):
+Usando el UUID:
 
 ```bash
 sudo nmcli connection modify TU_UUID \
@@ -255,7 +230,7 @@ ipv4.ignore-auto-routes yes \
 ipv4.ignore-auto-dns yes
 ```
 
-⚠️ Cambia:
+Cambia:
 
 * `TU_UUID`
 * `192.168.1.50`
@@ -263,7 +238,7 @@ ipv4.ignore-auto-dns yes
 
 ---
 
-# PASO 5 — Reiniciar NetworkManager (IMPORTANTE)
+# PASO 4 — Reiniciar NetworkManager
 
 En Bookworm esto es clave:
 
@@ -271,11 +246,9 @@ En Bookworm esto es clave:
 sudo systemctl restart NetworkManager
 ```
 
-Espera 5–10 segundos.
-
 ---
 
-# PASO 6 — Verificar
+# PASO 5 — Verificar
 
 ```bash
 ip a
@@ -298,35 +271,6 @@ Debe decir:
 ```
 default via 192.168.1.1
 ```
-
----
-
-# SI NO CAMBIA (SOLUCIÓN DEFINITIVA)
-
-Borrar conexión DHCP y crear nueva limpia:
-
-```bash
-sudo nmcli connection delete "Wired connection 1"
-```
-
-Luego crear estática nueva:
-
-```bash
-sudo nmcli connection add type ethernet ifname eth0 \
-con-name static-eth0 \
-ipv4.method manual \
-ipv4.addresses 192.168.1.50/24 \
-ipv4.gateway 192.168.1.1 \
-ipv4.dns "8.8.8.8 1.1.1.1"
-```
-
-Activarla:
-
-```bash
-sudo nmcli connection up static-eth0
-```
-
-Eso elimina cualquier resto de DHCP.
 
 ---
 
