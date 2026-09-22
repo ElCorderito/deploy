@@ -114,6 +114,7 @@ KIOSK_URL: "http://localhost:3000"
 Prueba ping (debería decir “pong”):
 
 ```bash
+cd deploy
 ansible -i inventory.ini raspis -m ping
 ```
 
