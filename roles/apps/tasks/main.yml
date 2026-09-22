@@ -197,6 +197,15 @@
     group: "{{ kiosk_user }}"
   become: yes
 
+- name: Instalar script opcional de orientación del kiosk
+  copy:
+    src: configure_kiosk_display.sh
+    dest: /usr/local/bin/configure_kiosk_display.sh
+    mode: "0755"
+    owner: root
+    group: root
+  become: yes
+
 # ---------- systemd: services/timers ----------
 - name: electron_rasp-electron.service
   template:

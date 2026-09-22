@@ -22,6 +22,11 @@ Environment=PIPEWIRE_LATENCY=128/48000
 
 # dar 2s para que el display esté 100% listo
 ExecStartPre=/bin/sleep 2
+{% if display_orientation is defined %}
+# Solo se agrega en hosts que definan display_orientation en inventory/host_vars.
+# Si no existe la variable, el servicio queda con el comportamiento landscape actual.
+ExecStartPre=/usr/local/bin/configure_kiosk_display.sh {{ display_orientation }}
+{% endif %}
 ExecStart=/usr/bin/npm run electron
 
 KillMode=control-group
