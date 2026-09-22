@@ -27,6 +27,13 @@ maintenance_hour:      "03:00:00"
 # --- Mantenimiento APT
 apt_every_days: 30
 
+# --- HDMI persistente para Raspberry Pi OS Bookworm + KMS + X11
+# Se deja apagado por defecto para no cambiar Raspberry existentes.
+# Activalo por host con force_kiosk_hdmi=true en inventory.ini o host_vars.
+force_kiosk_hdmi: false
+kiosk_hdmi_connector: "HDMI-A-1"
+kiosk_hdmi_mode: "1920x1080@60D"
+
 # --- Optimización CPU del service de Electron (se aplica si hay >=4 vCPUs)
 cpuset_default: "2 3"
 

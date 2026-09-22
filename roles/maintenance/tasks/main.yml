@@ -1,25 +1,142 @@
 ---
-# Detecta path correcto (Bookworm usa /boot/firmware)
+# Raspberry Pi OS Bookworm usa KMS. Para los hosts donde se active
+# force_kiosk_hdmi, mantenemos HDMI presente desde el kernel (cmdline.txt)
+# aunque la TV entre en standby o deje de anunciar hotplug.
+#
+# Si force_kiosk_hdmi no está activo, estas tareas NO cambian la configuración
+# de pantalla de la Raspberry. Así las instalaciones existentes quedan iguales.
+
+- name: Validar conector HDMI configurado
+  assert:
+    that:
+      - kiosk_hdmi_connector in ['HDMI-A-1', 'HDMI-A-2']
+    fail_msg: "kiosk_hdmi_connector debe ser HDMI-A-1 o HDMI-A-2."
+  when: force_kiosk_hdmi | bool
+
+- name: Calcular mascara vc4.force_hotplug
+  set_fact:
+    kiosk_hdmi_force_hotplug_mask: "{{ 1 if kiosk_hdmi_connector == 'HDMI-A-1' else 2 }}"
+  when: force_kiosk_hdmi | bool
+
 - name: Detectar config.txt
   stat:
     path: /boot/firmware/config.txt
   register: fw
+  when: force_kiosk_hdmi | bool
 
 - name: Set rpi_config_path
   set_fact:
     rpi_config_path: "{{ '/boot/firmware/config.txt' if fw.stat.exists else '/boot/config.txt' }}"
+  when: force_kiosk_hdmi | bool
 
-- name: Forzar HDMI y 1080p60
+- name: Guardar backup original de config.txt una sola vez
+  copy:
+    src: "{{ rpi_config_path }}"
+    dest: "{{ rpi_config_path }}.pre-kiosk-hdmi"
+    remote_src: yes
+    force: no
+    owner: root
+    group: root
+    mode: preserve
+  become: yes
+  when: force_kiosk_hdmi | bool
+
+- name: Quitar bloque HDMI legacy administrado por Ansible
   blockinfile:
     path: "{{ rpi_config_path }}"
     marker: "# {mark} Ansible kiosk HDMI"
-    block: |
-      hdmi_force_hotplug=1
-      hdmi_drive=2
-      hdmi_group=1
-      hdmi_mode=16
-      disable_overscan=1
+    state: absent
   become: yes
+  when: force_kiosk_hdmi | bool
+
+# Bookworm normalmente usa /boot/firmware/cmdline.txt. Se conserva fallback
+# por seguridad, aunque este deploy está pensado para Bookworm.
+- name: Detectar cmdline.txt de Bookworm
+  stat:
+    path: /boot/firmware/cmdline.txt
+  register: fw_cmdline
+  when: force_kiosk_hdmi | bool
+
+- name: Set rpi_cmdline_path
+  set_fact:
+    rpi_cmdline_path: "{{ '/boot/firmware/cmdline.txt' if fw_cmdline.stat.exists else '/boot/cmdline.txt' }}"
+  when: force_kiosk_hdmi | bool
+
+- name: Verificar que cmdline.txt existe
+  stat:
+    path: "{{ rpi_cmdline_path }}"
+  register: rpi_cmdline_stat
+  when: force_kiosk_hdmi | bool
+
+- name: Fallar si no existe cmdline.txt
+  fail:
+    msg: "No existe {{ rpi_cmdline_path }}; no se modificó la configuración HDMI."
+  when:
+    - force_kiosk_hdmi | bool
+    - not rpi_cmdline_stat.stat.exists
+
+- name: Guardar backup original de cmdline.txt una sola vez
+  copy:
+    src: "{{ rpi_cmdline_path }}"
+    dest: "{{ rpi_cmdline_path }}.pre-kiosk-hdmi"
+    remote_src: yes
+    force: no
+    owner: root
+    group: root
+    mode: preserve
+  become: yes
+  when: force_kiosk_hdmi | bool
+
+# Si ya se había probado otra configuración del mismo conector, la retiramos
+# antes de añadir la configuración canónica para evitar parámetros duplicados.
+- name: Quitar video= previo del conector administrado
+  replace:
+    path: "{{ rpi_cmdline_path }}"
+    regexp: '(^|\s+)video={{ kiosk_hdmi_connector | regex_escape }}:\S+'
+    replace: '\1'
+  become: yes
+  when: force_kiosk_hdmi | bool
+
+- name: Quitar vc4.force_hotplug previo
+  replace:
+    path: "{{ rpi_cmdline_path }}"
+    regexp: '(^|\s+)vc4\.force_hotplug=\S+'
+    replace: '\1'
+  become: yes
+  when: force_kiosk_hdmi | bool
+
+- name: Normalizar espacios de cmdline.txt
+  replace:
+    path: "{{ rpi_cmdline_path }}"
+    regexp: ' {2,}'
+    replace: ' '
+  become: yes
+  when: force_kiosk_hdmi | bool
+
+- name: Forzar HDMI persistente 1080p60 en Bookworm KMS
+  lineinfile:
+    path: "{{ rpi_cmdline_path }}"
+    regexp: '^(.*\S)\s*$'
+    line: '\1 video={{ kiosk_hdmi_connector }}:{{ kiosk_hdmi_mode }} vc4.force_hotplug={{ kiosk_hdmi_force_hotplug_mask }}'
+    backrefs: yes
+  become: yes
+  when: force_kiosk_hdmi | bool
+
+- name: Leer cmdline.txt final para validar HDMI
+  slurp:
+    src: "{{ rpi_cmdline_path }}"
+  register: rpi_cmdline_final
+  become: yes
+  when: force_kiosk_hdmi | bool
+
+- name: Validar parámetros HDMI de Bookworm
+  assert:
+    that:
+      - "('video=' ~ kiosk_hdmi_connector ~ ':' ~ kiosk_hdmi_mode) in (rpi_cmdline_final.content | b64decode)"
+      - "('vc4.force_hotplug=' ~ (kiosk_hdmi_force_hotplug_mask | string)) in (rpi_cmdline_final.content | b64decode)"
+    fail_msg: "Los parámetros HDMI no quedaron correctamente en {{ rpi_cmdline_path }}."
+    success_msg: "HDMI persistente configurado en {{ rpi_cmdline_path }}; se aplicará tras reiniciar."
+  when: force_kiosk_hdmi | bool
 
 - name: Instalar script de mantenimiento
   copy:
