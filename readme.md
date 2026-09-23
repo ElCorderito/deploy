@@ -124,38 +124,71 @@ Corre el playbook (pedirá sudo y, si cifraste, la clave de Vault):
 ansible-playbook -i inventory.ini site.yml -l rasp_trolley --ask-vault-pass -K
 ```
 
-## 7) Malo de audio
+## 7) Audio HDMI
 
-Checar con "id -u" que numero te lanz y ponerlo en este archivo:
-   ```bash
-   sudo nano /etc/systemd/system/electron_rasp-electron.service
-   ```
+El audio del kiosk ya se configura **automaticamente desde Ansible**. No edites a mano
+`electron_rasp-electron.service` ni agregues `/run/user/1000`.
 
-Y poner esto abajo de las otras Environment:
-   ```bash
-   # ---- Audio: forzar PipeWire/Pulse (evita ALSA directo) ----
-   Environment=XDG_RUNTIME_DIR=/run/user/1000
-   Environment=PULSE_SERVER=unix:/run/user/1000/pulse/native
-   Environment=PIPEWIRE_LATENCY=128/48000
-   ```
+El deploy hace lo siguiente al arrancar Electron:
 
-Edita el override de Electron (flags)
-   ```bash
-   sudo nano /etc/systemd/system/electron_rasp-electron.service.d/override.conf
-   ```
+1. Detecta el UID real del usuario del kiosk.
+2. Espera a que PipeWire/Pulse este disponible.
+3. Activa `output:hdmi-stereo` en el HDMI usado por el kiosk.
+4. Quita mute y deja el volumen configurado.
+5. Fuerza `PULSE_SINK` para que Electron use ese HDMI aunque WirePlumber elija otro sink por defecto.
 
-Y hasta abajo se debe de ver asi:
-   ```bash
-   --autoplay-policy=no-user-gesture-required \
-   --disable-features=AudioServiceOutOfProcess"
-   ```
+Por defecto usa el mismo conector del video:
 
-Y recargar:
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl restart electron_rasp-flask.service
-   sudo systemctl restart electron_rasp-electron.service
-   ```
+```yaml
+kiosk_hdmi_connector: "HDMI-A-1"
+kiosk_audio_enabled: true
+kiosk_audio_volume: "100"
+```
+
+Si la Raspberry usa el segundo puerto HDMI:
+
+```yaml
+kiosk_hdmi_connector: "HDMI-A-2"
+```
+
+Si una instalacion no debe usar audio HDMI, se puede poner por host:
+
+```yaml
+kiosk_audio_enabled: false
+```
+
+### Diagnostico rapido si no se escucha
+
+Primero revisa que exista el sink HDMI:
+
+```bash
+pactl list short sinks
+```
+
+Debe aparecer un nombre que contenga `hdmi` y `hdmi-stereo`.
+
+Para ver lo que hizo el arranque de Electron:
+
+```bash
+journalctl -b -u electron_rasp-electron.service --no-pager | grep -E '\[audio\]|PULSE_SINK'
+```
+
+Para probar el HDMI directamente por ALSA en el primer puerto:
+
+```bash
+speaker-test -D hdmi:CARD=vc4hdmi0,DEV=0 -c 2 -t wav -l 1
+```
+
+En el segundo puerto usa `vc4hdmi1`.
+
+Si el deploy se acaba de actualizar, vuelve a aplicarlo y reinicia:
+
+```bash
+ansible-playbook -i inventory.ini site.yml -l NOMBRE_DE_LA_RASP -K
+sudo reboot
+```
+
+No hace falta correr manualmente `daemon-reload` ni editar los archivos de systemd para el audio.
 
 ## 8) Dejar ip statica
 

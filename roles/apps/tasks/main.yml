@@ -206,13 +206,35 @@
     group: root
   become: yes
 
+- name: Instalar configurador de audio HDMI del kiosk
+  copy:
+    src: configure_kiosk_audio.sh
+    dest: /usr/local/bin/configure_kiosk_audio.sh
+    mode: "0755"
+    owner: root
+    group: root
+  notify: restart electron kiosk
+  become: yes
+
+- name: Instalar wrapper de arranque de Electron con audio HDMI
+  copy:
+    src: start_kiosk_electron.sh
+    dest: /usr/local/bin/start_kiosk_electron.sh
+    mode: "0755"
+    owner: root
+    group: root
+  notify: restart electron kiosk
+  become: yes
+
 # ---------- systemd: services/timers ----------
 - name: electron_rasp-electron.service
   template:
     src: electron_rasp-electron.service.j2
     dest: /etc/systemd/system/electron_rasp-electron.service
     mode: "0644"
-  notify: [reload systemd]
+  notify:
+    - reload systemd
+    - restart electron kiosk
   become: yes
 
 - name: Crear dir para drop-ins de electron
@@ -220,6 +242,15 @@
     path: /etc/systemd/system/electron_rasp-electron.service.d
     state: directory
     mode: "0755"
+  become: yes
+
+- name: Eliminar override manual viejo de audio de Electron
+  file:
+    path: /etc/systemd/system/electron_rasp-electron.service.d/audio-sink.conf
+    state: absent
+  notify:
+    - reload systemd
+    - restart electron kiosk
   become: yes
 
 - name: Drop-in override (CPU + flags)

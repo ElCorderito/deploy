@@ -3,3 +3,10 @@
   become: yes
   systemd:
     daemon_reload: yes
+
+- name: restart electron kiosk
+  become: yes
+  systemd:
+    name: electron_rasp-electron.service
+    state: restarted
+    daemon_reload: yes

@@ -34,6 +34,12 @@ force_kiosk_hdmi: false
 kiosk_hdmi_connector: "HDMI-A-1"
 kiosk_hdmi_mode: "1920x1080@60D"
 
+# --- Audio HDMI del kiosk
+# Electron usa el mismo conector definido arriba. El wrapper detecta el UID
+# real, activa el perfil HDMI en PipeWire y fuerza ese sink para Electron.
+kiosk_audio_enabled: true
+kiosk_audio_volume: "100"
+
 # --- Optimización CPU del service de Electron (se aplica si hay >=4 vCPUs)
 cpuset_default: "2 3"
 
@@ -47,6 +53,7 @@ apt_base_packages:
   - python3-pip
   - nodejs
   - npm
+  - pulseaudio-utils
   - lxde
   - lightdm
   - xserver-xorg
